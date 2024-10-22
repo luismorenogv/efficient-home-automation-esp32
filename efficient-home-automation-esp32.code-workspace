@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "main-project",
+			"path": "main-project"
+		},
+		{
+			"name": "clock-experiment",
+			"path": "clock-experiment"
+		},
+		{
+			"name": "consumption-experiment",
+			"path": "consumption-experiment"
+		},
+		{
+			"name": "RF-IR-decoder",
+			"path": "RF-IR-decoder"
+		}
+	],
+	"settings": {}
+}

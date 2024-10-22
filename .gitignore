@@ -1,0 +1,9 @@
+# PlatformIO
+**/.pio/
+**/.vscode/
+**/build/
+*.bin
+*.elf
+*.hex
+*.o
+*.d
