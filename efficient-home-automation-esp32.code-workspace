@@ -13,8 +13,11 @@
 			"path": "consumption-experiment"
 		},
 		{
-			"name": "RF-IR-decoder",
-			"path": "RF-IR-decoder"
+			"name": "IR-decoder",
+			"path": "IR-decoder"
+		},
+		{
+			"path": "RF-decoder"
 		}
 	],
 	"settings": {}
