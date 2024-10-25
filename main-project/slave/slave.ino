@@ -7,6 +7,8 @@
 #define DHTPIN 4          // GPIO pin connected to DHT22
 #define DHTTYPE DHT22     // DHT22 sensor type
 
+#define SLEEP_DURATION 60
+
 DHT dht(DHTPIN, DHTTYPE);
 
 // Structure to hold sensor data
@@ -82,8 +84,8 @@ void setup() {
   }
   Serial.println("Peer Added Successfully");
 
-  // Configure deep sleep wakeup timer (60 seconds)
-  esp_sleep_enable_timer_wakeup(60 * 1000000);
+  // Configure deep sleep wakeup timer
+  esp_sleep_enable_timer_wakeup(SLEEP_DURATION * 1000000);
 }
 
 void loop() {

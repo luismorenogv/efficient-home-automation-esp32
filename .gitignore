@@ -1,0 +1,8 @@
+# Arduino
+*.bin
+*.elf
+*.hex
+*.log
+*.out
+*.pyc
+__pycache__/
