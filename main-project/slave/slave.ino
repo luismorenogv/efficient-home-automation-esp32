@@ -1,6 +1,5 @@
 #include <esp_now.h>
 #include <WiFi.h>
-#include <esp_wifi.h>
 #include "DHT.h"
 
 // DHT22 Sensor Configuration
@@ -46,21 +45,8 @@ void setup() {
   // Initialize DHT22 sensor
   dht.begin();
 
-  // Initialize Wi-Fi in STA mode
+  // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-
-  delay(100); // Ensure Wi-Fi is initialized
-
-  // Set Wi-Fi channel to 1
-  if (esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
-    Serial.println("Failed to set Wi-Fi channel");
-  } else {
-    Serial.println("Wi-Fi channel set to 1");
-  }
-
-  Serial.print("Slave MAC Address: ");
-  Serial.println(WiFi.macAddress());
 
   // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -75,7 +61,7 @@ void setup() {
   // Configure peer (master)
   esp_now_peer_info_t peerInfo;
   memcpy(peerInfo.peer_addr, masterAddress, 6);
-  peerInfo.channel = 1;  
+  peerInfo.channel = 0;  
   peerInfo.encrypt = false;
 
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
@@ -113,9 +99,7 @@ void loop() {
 
     // Wait for send confirmation or timeout after 5 seconds
     unsigned long start = millis();
-    while (!dataSent && millis() - start < 5000) {
-      delay(100);
-    }
+    while (!dataSent && millis() - start < 5000);
 
     if (!dataSent) {
       Serial.println("Send timeout");
