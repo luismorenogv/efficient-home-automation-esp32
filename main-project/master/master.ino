@@ -1,6 +1,5 @@
 #include <esp_now.h>
 #include <WiFi.h>
-#include <esp_wifi.h>
 
 // Structure to receive sensor data
 typedef struct struct_message {
@@ -33,7 +32,6 @@ void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, in
   Serial.print("Data received from: ");
   Serial.println(macStr);
 
-  // Print received data
   Serial.print("Temperature: ");
   Serial.print(receivedData.temperature);
   Serial.print(" °C, Humidity: ");
@@ -54,21 +52,8 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Master Setup");
 
-  // Initialize Wi-Fi in STA mode
+  // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-
-  delay(100); // Ensure Wi-Fi is initialized
-
-  // Set Wi-Fi channel to 1
-  if (esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
-    Serial.println("Failed to set Wi-Fi channel");
-  } else {
-    Serial.println("Wi-Fi channel set to 1");
-  }
-
-  Serial.print("Master MAC Address: ");
-  Serial.println(WiFi.macAddress());
 
   // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -78,7 +63,7 @@ void setup() {
   Serial.println("ESP-NOW Initialized");
 
   // Register receive callback
-  esp_now_register_recv_cb(OnDataRecv);
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
 }
 
 void loop() {
