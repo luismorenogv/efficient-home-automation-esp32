@@ -1,71 +1,88 @@
-#include <esp_now.h>
+#include "master.h"
 #include <WiFi.h>
 
-// Structure to receive sensor data
-typedef struct struct_message {
-  float temperature;
-  float humidity;
-} struct_message;
+// ----------------------------
+// Global Variables
+// ----------------------------
 
-struct_message receivedData;
+// Data structure to hold received sensor data
+struct_message received_data;
 
-// Data storage configuration
-#define DATA_ARRAY_SIZE 144
-float temperatureData[DATA_ARRAY_SIZE];
-float humidityData[DATA_ARRAY_SIZE];
-int dataIndex = 0;
+// Arrays to store temperature and humidity data
+float temperature_data[DATA_ARRAY_SIZE];
+float humidity_data[DATA_ARRAY_SIZE];
+int data_index = 0;  // Index to track data storage location
 
-// Callback when data is received
-void OnDataRecv(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
-  if (len != sizeof(struct_message)) {
-    Serial.println("Received data size mismatch");
-    return;
-  }
+// ----------------------------
+// Callback Function
+// ----------------------------
 
-  memcpy(&receivedData, incomingData, sizeof(receivedData));
+void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, int len) {
+    if (len != sizeof(struct_message)) {
+        Serial.println("Received data size mismatch");
+        return;
+    }
 
-  // Print sender's MAC address
-  char macStr[18];
-  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-           info->src_addr[0], info->src_addr[1], info->src_addr[2],
-           info->src_addr[3], info->src_addr[4], info->src_addr[5]);
-  Serial.print("Data received from: ");
-  Serial.println(macStr);
+    // Copy received data into the struct
+    memcpy(&received_data, incoming_data, sizeof(received_data));
 
-  Serial.print("Temperature: ");
-  Serial.print(receivedData.temperature);
-  Serial.print(" °C, Humidity: ");
-  Serial.print(receivedData.humidity);
-  Serial.println(" %");
+    // Print sender's MAC address
+    char mac_str[18];
+    snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+             info->src_addr[0], info->src_addr[1], info->src_addr[2],
+             info->src_addr[3], info->src_addr[4], info->src_addr[5]);
+    Serial.print("Data received from: ");
+    Serial.println(mac_str);
 
-  // Store data in arrays
-  temperatureData[dataIndex] = receivedData.temperature;
-  humidityData[dataIndex] = receivedData.humidity;
+    // Print sensor data
+    Serial.print("Temperature: ");
+    Serial.print(received_data.temperature);
+    Serial.print(" °C, Humidity: ");
+    Serial.print(received_data.humidity);
+    Serial.println(" %");
 
-  // Update index
-  dataIndex = (dataIndex + 1) % DATA_ARRAY_SIZE;
-  Serial.print("Data index updated to: ");
-  Serial.println(dataIndex);
+    // Store data in arrays
+    temperature_data[data_index] = received_data.temperature;
+    humidity_data[data_index] = received_data.humidity;
+
+    // Update index
+    data_index = (data_index + 1) % DATA_ARRAY_SIZE;
+    Serial.print("Data index updated to: ");
+    Serial.println(data_index);
 }
+
+void haltExecution() {
+    Serial.println("Execution halted");
+    while (true) {
+        delay(1000);  // Halt execution on failure
+    }
+}
+// ----------------------------
+// Setup Function
+// ----------------------------
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println("Master Setup");
+    Serial.begin(115200);
+    Serial.println("Master Setup");
 
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+    // Set device as a Wi-Fi Station
+    WiFi.mode(WIFI_STA);
 
-  // Initialize ESP-NOW
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW Initialization Failed");
-    return;
-  }
-  Serial.println("ESP-NOW Initialized");
+    // Initialize ESP-NOW
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("ESP-NOW Initialization Failed");
+        haltExecution();
+    }
+    Serial.println("ESP-NOW Initialized");
 
-  // Register receive callback
-  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+    // Register receive callback
+    esp_now_register_recv_cb(onDataRecv);
 }
 
+// ----------------------------
+// Loop Function
+// ----------------------------
+
 void loop() {
-  // No actions needed in loop
+    // No actions needed in loop
 }
