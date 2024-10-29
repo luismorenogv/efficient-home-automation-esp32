@@ -1,208 +1,175 @@
+/**
+ * @file slave.ino 
+ * @brief Slave ESP32 main code
+ *
+ * @author Luis Moreno
+ * @date October 26, 2024
+ */
+
 #include "slave.h"
 #include <WiFi.h>
 #include "DHT.h"
 
-// ----------------------------
-// Global Variables
-// ----------------------------
-
 // Initialize DHT sensor
 DHT dht(DHT_PIN, DHT_TYPE);
 
-// Structure to hold sensor data
-typedef struct struct_message {
-  float temperature;
-  float humidity;
-} struct_message;
-
-// Sensor data message
+// Structure for sensor data
 struct_message data_to_send;
 
-// Flags and State Variables
+// Command recieved from the master
+uint8_t received_command;
+
+// Flags and state variables
 volatile bool data_sent = false;
-RTC_DATA_ATTR bool send_climate_data = true;
 
 // RTC memory attributes to retain data during deep sleep
 RTC_DATA_ATTR uint8_t devices_state = 0x00;
+RTC_DATA_ATTR uint16_t cycle_count = 0;
 
-// ----------------------------
-// Callback Function
-// ----------------------------
 
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  char mac_str[18];
-  snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
-           mac_addr[0], mac_addr[1], mac_addr[2],
-           mac_addr[3], mac_addr[4], mac_addr[5]);
-  Serial.print("Packet sent to: ");
-  Serial.print(mac_str);
-  Serial.print(" - Status: ");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Success" : "Failure");
-
   data_sent = true;
 }
 
-// ----------------------------
-// Function Definitions
-// ----------------------------
+void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, int len) {
+  if (len < sizeof(received_command)) return;
+
+  memcpy(&received_command, incoming_data, sizeof(received_command));
+
+  // Manage command (sync clock or configure lights or air conditioner)
+}
 
 void initializeEspNow() {
-  // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
-
-  // Initialize ESP-NOW
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW Initialization Failed");
     haltExecution();
   }
-  Serial.println("ESP-NOW Initialized");
 
+  // Register receive callback
+  esp_now_register_recv_cb(onDataRecv);
+}
+
+void configureEspNowSending() {
   // Register send callback
   esp_now_register_send_cb(onDataSent);
 
   // Configure peer (master)
   esp_now_peer_info_t peer_info;
   memcpy(peer_info.peer_addr, MASTER_ADDRESS, 6);
-  peer_info.channel = 0;
+  peer_info.channel = 0;  
   peer_info.encrypt = false;
 
   if (esp_now_add_peer(&peer_info) != ESP_OK) {
     Serial.println("Failed to add peer");
     haltExecution();
   }
-  Serial.println("Peer Added Successfully");
 }
 
+// Control lights
 void turnLights(bool state) {
   if (state) {
     devices_state |= LIGHTS_MASK;
-    // TODO: Activate lights through RF 
-    // TODO: Activate PIR Sensor 
+    // TODO: Activate lights via RF
+    Serial.println("Lights ON");
   }
   else {
     devices_state &= ~LIGHTS_MASK;
-    // TODO: Deactivate lights through RF 
+    // TODO: Deactivate lights via RF
+    Serial.println("Lights OFF");
   }
 }
 
+// Control air conditioner
 void turnAirConditioner(bool state) {
   if (state) {
     devices_state |= AIR_CONDITIONER_MASK;
-    // TODO: Activate Air Conditioner through IR 
-    // TODO: Activate PIR Sensor
+    // TODO: Activate air conditioner via IR
+    Serial.println("Air Conditioner ON");
   }
   else {
     devices_state &= ~AIR_CONDITIONER_MASK;
-    // TODO: Deactivate Air Conditioner through IR 
+    // TODO: Deactivate air conditioner via IR
+    Serial.println("Air Conditioner OFF");
   }
 }
 
+// Read sensor data and send
 void readAndSendSensorData() {
   float temperature = dht.readTemperature();
   float humidity = dht.readHumidity();
 
-  // Ensure valid data
   if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("Failed to read from DHT22");
+    Serial.println("DHT22 read failed");
+    return;
   }
-  else {
-    // Prepare data struct
-    data_to_send.temperature = temperature;
-    data_to_send.humidity = humidity;
 
-    // Turn off flag before sending
-    data_sent = false;
+  data_to_send.temperature = temperature;
+  data_to_send.humidity = humidity;
 
-    // Send data to master
-    esp_err_t result = esp_now_send(MASTER_ADDRESS, (uint8_t *)&data_to_send, sizeof(data_to_send));
+  data_sent = false;
 
-    if (result == ESP_OK) {
-      Serial.println("Data sent successfully");
-    }
-    else {
-      Serial.println("Error sending data");
-    }
+  esp_err_t result = esp_now_send(MASTER_ADDRESS, (uint8_t *)&data_to_send, sizeof(data_to_send));
 
-    // Wait for send confirmation or timeout after 5 seconds
-    unsigned long start = millis();
-    while (!data_sent && millis() - start < 5000);
+  if (result != ESP_OK) {
+    Serial.println("Error sending data");
+  }
 
-    if (!data_sent) {
-      Serial.println("Send timeout");
-    }
+  unsigned long start = millis();
+  while (!data_sent && millis() - start < 5000);
+
+  if (!data_sent) {
+    Serial.println("Send timeout");
   }
 }
 
+// Halt execution
 void haltExecution(){
-  Serial.println("Execution halted");
   while (true) {
-    delay(1000); // Halt execution on failure
+    delay(1000);
   }
 }
-
-// ----------------------------
-// Setup Function
-// ----------------------------
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Slave Setup");
 
-  // Determine wakeup reason
-  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+  dht.begin();
 
-  switch(wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0:
-      // The room has been empty for a certain amount of time configured by hardware
-      Serial.println("Wakeup caused by PIR");  
-      if ((devices_state & LIGHTS_MASK) != 0) {
-        turnLights(false);
-      }
-      if ((devices_state & AIR_CONDITIONER_MASK) != 0) {
-        turnAirConditioner(false);
-      }
-      // TODO: Turn off PIR Sensor
-      break;
-    case ESP_SLEEP_WAKEUP_TIMER:
-      Serial.println("Wakeup caused by timer");
-      send_climate_data = true;
-      break;
-    default:
-      Serial.printf("Wakeup was caused by: %d\n", wakeup_reason);
-      break;
-  }
+  initializeEspNow();
 
-  if (send_climate_data) {
-    // Initialize DHT22 sensor
-    dht.begin();
+  if (cycle_count % SEND_DATA_INTERVAL_S == 0) {
+    Serial.println("Reading and sending temperature and humidity values...");
+    configureEspNowSending();
 
-    // Initialize ESP-NOW
-    initializeEspNow();
-
-    // Read and send sensor data
     readAndSendSensorData();
-
-    send_climate_data = false;
   }
 
-  // Configure deep sleep wakeup timer
-  esp_sleep_enable_timer_wakeup(SENDING_PERIOD * 1000000); // 60 seconds in microseconds
+  // Poll LD2410 for presence detection if any device is active
+  if (cycle_count % LD2410_POLLING_INTERVAL_S == 0 && devices_state != 0) {
+    // Activate transistor connected to the power
+    pinMode(LD2410_POWER_PIN, OUTPUT);
+    digitalWrite(LD2410_POWER_PIN, HIGH);
+    Serial.println("LD2410 Activated for presence detection");
+    
+    // TODO: Algorithm to interpret the sensor (Stabilization, consistency...)
 
-  if (devices_state != 0) {
-    // Enable PIR low level interrupt if light and/or AC are on
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIR_PIN, 0); // Wake up when PIR_PIN is LOW
-    // TODO: Turn on PIR Sensor
+
+    // Deactivate LD2410
+    digitalWrite(LD2410_POWER_PIN, LOW);
   }
+
+  // Increment cycle count
+  cycle_count++;
+
+  // Configure next wake up
+  esp_sleep_enable_timer_wakeup(WAKE_UP_PERIOD_MS * MS_TO_US_FACTOR);
 
   // Enter deep sleep
-  Serial.println("Entering Deep Sleep for 1 minute");
+  Serial.println("Entering Deep Sleep");
   esp_deep_sleep_start();
 }
-
-// ----------------------------
-// Loop Function
-// ----------------------------
 
 void loop() {
   // Not used
 }
+
