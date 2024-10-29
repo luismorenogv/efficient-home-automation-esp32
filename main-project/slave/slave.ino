@@ -50,13 +50,14 @@ void initializeEspNow() {
 }
 
 void configureEspNowSending() {
-  // Register send callback
+  // Registrar la callback de envío
   esp_now_register_send_cb(onDataSent);
 
-  // Configure peer (master)
+  // Configurar peer (master)
   esp_now_peer_info_t peer_info;
+  memset(&peer_info, 0, sizeof(peer_info)); // Inicializar todos los campos a 0
   memcpy(peer_info.peer_addr, MASTER_ADDRESS, 6);
-  peer_info.channel = 0;  
+  peer_info.channel = WiFi.channel();  // Usa el canal actual
   peer_info.encrypt = false;
 
   if (esp_now_add_peer(&peer_info) != ESP_OK) {
@@ -64,6 +65,7 @@ void configureEspNowSending() {
     haltExecution();
   }
 }
+
 
 // Control lights
 void turnLights(bool state) {
