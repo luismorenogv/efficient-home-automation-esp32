@@ -36,7 +36,7 @@
 #define WAKE_UP_PERIOD_MS 1000       // Wake-up period in ms
 #define COMM_WINDOW_DURATION_MS 100  // Communication window duration in ms
 
-#define SEND_DATA_INTERVAL_S 600      // Send data every 600 seconds (10 minutes)
+#define SEND_DATA_INTERVAL_S 5      // Send data every 600 seconds (10 minutes)
 #define LD2410_POLLING_INTERVAL_S 5   // Poll LD2410 every 5 seconds
 
 // Master Device MAC Address
