@@ -55,9 +55,9 @@ void configureEspNowSending() {
 
   // Configurar peer (master)
   esp_now_peer_info_t peer_info;
-  memset(&peer_info, 0, sizeof(peer_info)); // Inicializar todos los campos a 0
+  memset(&peer_info, 0, sizeof(peer_info)); // Initialize to zero
   memcpy(peer_info.peer_addr, MASTER_ADDRESS, 6);
-  peer_info.channel = WiFi.channel();  // Usa el canal actual
+  peer_info.channel = 0;
   peer_info.encrypt = false;
 
   if (esp_now_add_peer(&peer_info) != ESP_OK) {
@@ -127,20 +127,22 @@ void readAndSendSensorData() {
 // Halt execution
 void haltExecution(){
   while (true) {
+    Serial.print("Execution halted");
     delay(1000);
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Slave Setup");
-
-  dht.begin();
+  Serial.print("Cicle: ");
+  Serial.println(cycle_count);
 
   initializeEspNow();
 
   if (cycle_count % SEND_DATA_INTERVAL_S == 0) {
     Serial.println("Reading and sending temperature and humidity values...");
+
+    dht.begin();
     configureEspNowSending();
 
     readAndSendSensorData();
@@ -160,13 +162,11 @@ void setup() {
     digitalWrite(LD2410_POWER_PIN, LOW);
   }
 
-  // Increment cycle count
   cycle_count++;
 
   // Configure next wake up
   esp_sleep_enable_timer_wakeup(WAKE_UP_PERIOD_MS * MS_TO_US_FACTOR);
 
-  // Enter deep sleep
   Serial.println("Entering Deep Sleep");
   esp_deep_sleep_start();
 }
