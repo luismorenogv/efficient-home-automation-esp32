@@ -2,7 +2,7 @@
  * @file slave.h 
  * @brief Constants and Declarations of Functions for slave.ino
  *
- * @author Luis Moreno
+ * @author 
  * @date October 26, 2024
  */
 
@@ -24,7 +24,7 @@
 // Sensor Type
 #define DHT_TYPE DHT22
 
-// Conversion
+// Conversion Factors
 #define MS_TO_US_FACTOR 1000
 #define S_TO_MS_FACTOR 1000
 
@@ -36,22 +36,43 @@
 #define WAKE_UP_PERIOD_MS 1000       // Wake-up period in ms
 #define COMM_WINDOW_DURATION_MS 100  // Communication window duration in ms
 
-#define SEND_DATA_INTERVAL_S 5      // Send data every 600 seconds (10 minutes)
+#define SEND_DATA_INTERVAL_S 5        // Send data every 5 seconds
 #define LD2410_POLLING_INTERVAL_S 5   // Poll LD2410 every 5 seconds
+
+#define IM_HERE_INTERVAL_MS 5000      // Send notification for joining the network to master
+
+#define NUM_FRAMES 6
+
+const uint8_t FRAME_SIZE[NUM_FRAMES] = { 1, 1, 9, 2, 2, 5 };
 
 // Master Device MAC Address
 const uint8_t MASTER_ADDRESS[6] = {0x3C, 0x84, 0x27, 0xE1, 0xB2, 0xCC};
+
 // ----------------------------
 // Structures
 // ----------------------------
 
-/**
- * @brief Structure to hold sensor data (temperature and humidity).
- */
-typedef struct struct_message {
+// Message types enumeration (1 byte each)
+typedef enum : uint8_t {
+  IM_HERE     = 0x01, // Slave to Master: Indicates slave is present
+  START       = 0x02, // Master to Slave: Instructs slave to start operations
+  SENSOR_DATA = 0x03, // Slave to Master: Sends sensor data
+  LIGHTS      = 0x04, // Master to Slave: Control lights
+  AC          = 0x05, // Master to Slave: Control air conditioner
+  SYNC        = 0x06  // Master to Slave: Synchronize time
+} MessageType;
+
+// Generic message structure
+typedef struct {
+  MessageType type;   // Message type (1 byte)
+  uint8_t payload[8]; // Additional data
+} Message;
+
+// Sensor data structure
+typedef struct {
   float temperature;
   float humidity;
-} struct_message;
+} SensorData;
 
 // ----------------------------
 // Function Declarations
@@ -89,14 +110,9 @@ void turnLights(bool state);
 void turnAirConditioner(bool state);
 
 /**
- * @brief Initializes ESP-NOW communication.
+ * @brief Initializes ESP-NOW communication and configures sending to the slave device.
  */
 void initializeEspNow();
-
-/**
- * @brief Configures ESP-NOW for sending data to the master device.
- */
-void configureEspNowSending();
 
 /**
  * @brief Reads data from the DHT22 sensor and sends it via ESP-NOW.
@@ -108,5 +124,9 @@ void readAndSendSensorData();
  */
 void haltExecution();
 
-#endif /* SLAVE_H */
+/**
+ * @brief Sends an IM_HERE message to the master indicating the slave is present.
+ */
+void sendImHereMessage();
 
+#endif /* SLAVE_H */
