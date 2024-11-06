@@ -3,46 +3,40 @@
  * @brief Slave ESP32 main code
  *
  * @author Luis Moreno
- * @date October 26, 2024
+ * @date November 1, 2024
  */
 
 #include "slave.h"
 #include <WiFi.h>
-#include "DHT.h"
 
 // Initialize DHT sensor
 DHT dht(DHT_PIN, DHT_TYPE);
-
-// Structure for sensor data
-SensorData data_to_send;
-
-// Command received from the master
-Message received_message;
-
-unsigned long start_time = 0;
 
 // Flags and state variables
 volatile bool data_sent = false;
 RTC_DATA_ATTR bool canOperate = false; // Flag indicating if the slave can start operating
 
 // RTC memory attributes to retain data during deep sleep
-RTC_DATA_ATTR uint8_t devices_state = 0x00;
 RTC_DATA_ATTR uint16_t cycle_count = 0;
 
+volatile unsigned long wake_up_instant = 0;
+
+volatile bool dataAck = true;
+
+unsigned long timer_start = 0;
+
+// ----------------------------
+// Callback Functions
+// ----------------------------
 
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  if (status == ESP_NOW_SEND_SUCCESS) {
-    data_sent = true;
-    Serial.println("Message sent successfully.");
-  } else {
-    Serial.println("Error sending message.");
-  }
+  data_sent = true;
 }
 
 void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, int len) {
   if (len < 1) {
-      Serial.println("Received empty message.");
-      return;
+    Serial.println("Received empty message.");
+    return;
   }
 
   MessageType msg_type = static_cast<MessageType>(incoming_data[0]);
@@ -51,36 +45,44 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, i
     case START:
       Serial.println("Received START from master.");
       canOperate = true; // Allow operations to begin
+      wake_up_instant = millis();
       break;
-
-    case SYNC:
-      // TODO: synchronize the slave to the master
+    case ACK:
+      if (len >= sizeof(MessageType) + sizeof(uint8_t)) { // Type + payload
+        MessageType acked_msg = static_cast<MessageType>(incoming_data[1]);
+        if (acked_msg == SENSOR_DATA){
+          dataAck = true;
+          Serial.println("ACK received for SENSOR_DATA.");
+        }
+        else{
+          Serial.print("ACK received for unknown message type: ");
+          Serial.println(acked_msg, HEX);
+        }
+      }
+      else{
+        Serial.println("ACK received with incorrect length.");
+      }
       break;
-
-    case LIGHTS:
-      // TODO
-      break;
-
-    case AC:
-      // TODO
-      break;
-
     default:
       Serial.println("Received unknown or unhandled message type.");
       break;
   }
 }
 
+// ----------------------------
+// Function Definitions
+// ----------------------------
+
 void initializeEspNow() {
   WiFi.mode(WIFI_STA);
   if (esp_now_init() != ESP_OK) {
+    Serial.println("ESP-NOW Initialization Failed");
     haltExecution();
   }
+  Serial.println("ESP-NOW Initialized");
 
-  // Register receive callback
+  // Register callbacks
   esp_now_register_recv_cb(onDataRecv);
-
-  // Register the send callback
   esp_now_register_send_cb(onDataSent);
 
   // Configure peer (master)
@@ -96,130 +98,137 @@ void initializeEspNow() {
   }
 }
 
-
-void turnLights(bool state) {
-  if (state) {
-    devices_state |= LIGHTS_MASK;
-    // TODO: Activate lights via RF
-    Serial.println("Lights ON");
-  }
-  else {
-    devices_state &= ~LIGHTS_MASK;
-    // TODO: Deactivate lights via RF
-    Serial.println("Lights OFF");
-  }
-}
-
-void turnAirConditioner(bool state) {
-  if (state) {
-    devices_state |= AIR_CONDITIONER_MASK;
-    // TODO: Activate air conditioner via IR
-    Serial.println("Air Conditioner ON");
-  }
-  else {
-    devices_state &= ~AIR_CONDITIONER_MASK;
-    // TODO: Deactivate air conditioner via IR
-    Serial.println("Air Conditioner OFF");
-  }
-}
-
-void readAndSendSensorData() {
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
-
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("DHT22 read failed");
-    return;
-  }
-
-  data_to_send.temperature = temperature;
-  data_to_send.humidity = humidity;
-
-  data_sent = false;
-
-  // Build message SENSOR_DATA
-  Message data_message;
-  data_message.type = SENSOR_DATA;
-  memcpy(data_message.payload, &data_to_send, sizeof(data_to_send));
-
-  esp_err_t result = esp_now_send(MASTER_ADDRESS, (uint8_t *)&data_message, sizeof(data_message.type) + sizeof(data_message.payload));
-
-  if (result != ESP_OK) {
-    Serial.println("Error sending SENSOR_DATA message.");
-  }
-
-  unsigned long start = millis();
-  while (!data_sent && millis() - start < 5000);
-
-  if (!data_sent) {
-    Serial.println("Send timeout for SENSOR_DATA message.");
-  }
-}
-
-
 void haltExecution(){
+  Serial.println("Execution halted.");
   while (true) {
-    Serial.print("Execution halted");
     delay(1000);
   }
 }
 
-void sendImHereMessage() {
-  Message im_here_message;
-  im_here_message.type = IM_HERE;
-
-  esp_err_t result = esp_now_send(MASTER_ADDRESS, (uint8_t *)&im_here_message, FRAME_SIZE[IM_HERE]);
-
+void sendMsg(const uint8_t *dest_mac, MessageType msg_type, const uint8_t *payload) {
+  esp_err_t result = ESP_OK;
+  Message msg;
+  msg.type = msg_type;
+  switch (msg_type){
+    case SYNC:
+      // Send SYNC message
+      result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      break;
+    case IM_HERE:
+      // Send IM_HERE message
+      result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      break;
+    case SENSOR_DATA:
+      // Send SENSOR_DATA message
+      // Assuming payload contains SensorData
+      memcpy(msg.payload, payload, sizeof(SensorData)); // copy temperature and humidity
+      result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      break;
+    case ACK:
+      // Send ACK message with payload
+      if (payload != nullptr){
+        memcpy(msg.payload, payload, SIZE_OF[msg_type] - sizeof(msg.type)); // 1 byte
+        result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      }
+      else{
+        Serial.println("ACK message requires payload.");
+        return;
+      }
+      break;
+    default:
+      Serial.println("Attempted to send unknown message type.");
+      return;
+  }
   if (result == ESP_OK) {
-    Serial.println("IM_HERE message sent successfully.");
+    Serial.print(NAME[msg.type]);
+    Serial.println(" message sent successfully.");
   } else {
-    Serial.println("Error sending IM_HERE message.");
+    Serial.print("Error sending message ");
+    Serial.print(NAME[msg.type]);
+    Serial.print(": ");
+    Serial.println(result);
   }
 }
 
+SensorData readSensorData(){
+  SensorData data;
 
-void setup() {
+  data.temperature = dht.readTemperature();
+  data.humidity = dht.readHumidity();
+
+  return data;
+}
+
+void setup(){
+  wake_up_instant = millis();
   Serial.begin(115200);
-  Serial.print("Cicle: ");
+  Serial.print("Cycle: ");
   Serial.println(cycle_count);
 
   initializeEspNow();
 }
 
-void loop() {
+void loop(){
+
   if (!canOperate){
-    if (millis() - start_time > IM_HERE_INTERVAL_MS){
-      sendImHereMessage();
-      start_time = millis();
+    if (millis() - wake_up_instant > IM_HERE_INTERVAL_MS){
+      Serial.println("Sending IM_HERE message.");
+      sendMsg(MASTER_ADDRESS, IM_HERE);
+      wake_up_instant = millis(); // Reset the timer after sending
     }
   }
   else {
-    if (cycle_count % SEND_DATA_INTERVAL_S == 0) {
+    SensorData data_to_send;
+
+    if (cycle_count % SYNC_INTERVAL == 0){
+      sendMsg(MASTER_ADDRESS, SYNC);
+    }
+
+    if (cycle_count % SEND_DATA_INTERVAL == 0) {
+
       Serial.println("Reading and sending temperature and humidity values...");
 
       dht.begin();
 
-      readAndSendSensorData();
-    }
-
-    // Poll LD2410 for presence detection if any device is active
-    if (cycle_count % LD2410_POLLING_INTERVAL_S == 0 && devices_state != 0) {
-      // Activate transistor connected to the power
-      pinMode(LD2410_POWER_PIN, OUTPUT);
-      digitalWrite(LD2410_POWER_PIN, HIGH);
-      Serial.println("LD2410 Activated for presence detection");
-      
-      // TODO: Algorithm to interpret the sensor (Stabilization, consistency...)
-
-
-      // Deactivate LD2410
-      digitalWrite(LD2410_POWER_PIN, LOW);
+      data_to_send = readSensorData();
+      if(isnan(data_to_send.temperature) || isnan(data_to_send.humidity)) {
+        Serial.println("DHT22 read failed");
+        dataAck = true; // Avoid resending the message
+      }
+      else{
+        dataAck = false;
+        Serial.println("Sending SENSOR_DATA message.");
+        sendMsg(MASTER_ADDRESS, SENSOR_DATA, (uint8_t*)&data_to_send);
+        timer_start = millis(); // Start the timer after sending
+      }
     }
 
     cycle_count++;
 
+    // Ensure the slave is awake for at least COMM_WINDOW_DURATION_S seconds
+    while (millis() - wake_up_instant < (COMM_WINDOW_DURATION_S * S_TO_MS)){
+      // Resend the data message if we haven't received ACK at the timeout expiration
+      if (!dataAck && (millis() - timer_start) > DATA_TIMEOUT_MS){
+        Serial.println("Timeout expired, resending sensor data message.");
+        sendMsg(MASTER_ADDRESS, SENSOR_DATA, (uint8_t*)&data_to_send);
+        timer_start = millis(); // Reset the timer after resending
+      }
+    }
+
+    if(!dataAck){
+      Serial.println("Data sensor ACK not received at the end of communication window.");
+    }
+
+    // Calculate sleep duration considering synchronization
+    unsigned long sleep_duration = (WAKE_UP_PERIOD_MIN * MIN_TO_MS) - (millis() - wake_up_instant);
+    if (sleep_duration < 0) sleep_duration = 0; // Error handling
+
+    Serial.print("Sleeping for: ");
+    Serial.print(sleep_duration / 1000);
+    Serial.println(" seconds.");
+
     // Configure next wake up
-    esp_sleep_enable_timer_wakeup(WAKE_UP_PERIOD_MS * MS_TO_US_FACTOR);
+    esp_sleep_enable_timer_wakeup(sleep_duration * MS_TO_US);
 
     Serial.println("Entering Deep Sleep");
     esp_deep_sleep_start();

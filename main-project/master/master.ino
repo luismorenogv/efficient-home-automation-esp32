@@ -3,7 +3,7 @@
  * @brief Master ESP32 main code
  * 
  * @author Luis Moreno
- * @date October 27, 2024
+ * @date November 1, 2024
  */
 
 #include "master.h"
@@ -36,12 +36,42 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, i
 
   switch (msg_type) {
     case IM_HERE:
-      Serial.println("Received IM_HERE from a new slave.");
-      handleNewSlave(info -> src_addr);
+      Serial.println("Received IM_HERE from a slave.");
+      handleNewSlave(info->src_addr);
+      break;
+
+    case SYNC:
+      Serial.println("Received SYNC from a slave.");
+      // Update last_sync_time
+      for (uint8_t i = 0; i < slave_count; i++) {
+        if (memcmp(info->src_addr, slaves[i].mac_addr, sizeof(slaves[i].mac_addr)) == 0) {
+          slaves[i].last_sync_time = millis();
+          break;
+        }
+      }
       break;
 
     case SENSOR_DATA:
       if (len >= sizeof(MessageType) + sizeof(SensorData)) { // 1 byte type + 8 bytes data
+
+        // Update last_sync_time for the slave
+        bool slave_found = false;
+        for (uint8_t i = 0; i < slave_count; i++) {
+          if (memcmp(info->src_addr, slaves[i].mac_addr, sizeof(slaves[i].mac_addr)) == 0) {
+            slaves[i].last_sync_time = millis();
+            slave_found = true;
+            break;
+          }
+        }
+
+        if (!slave_found) {
+          Serial.println("SENSOR_DATA received from an unknown slave.");
+          break;
+        }
+
+        // Send ACK for SENSOR_DATA
+        MessageType acked_msg = SENSOR_DATA;
+        sendMsg(info->src_addr, ACK, (uint8_t*)&acked_msg);
 
         SensorData received_data;
 
@@ -63,7 +93,19 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, i
         Serial.print("Data index updated to: ");
         Serial.println(data_index);
       } else {
-        Serial.println("Received DATA with incorrect length.");
+        Serial.println("Received SENSOR_DATA with incorrect length.");
+      }
+      break;
+
+    case ACK:
+      if (len >= 2 * sizeof(MessageType)) { // Type + payload
+        MessageType acked_msg = static_cast<MessageType>(incoming_data[1]);
+        Serial.print("Received ACK for message type: ");
+        Serial.println(NAME[acked_msg]);
+        // Handle ACK if needed
+      }
+      else{
+        Serial.println("ACK received with incorrect length.");
       }
       break;
 
@@ -73,12 +115,14 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, i
   }
 }
 
-
+// ----------------------------
+// Function Definitions
+// ----------------------------
 
 void haltExecution() {
   Serial.println("Execution halted");
   while (true) {
-      delay(1000);  // Halt execution on failure
+    delay(1000);  // Halt execution on failure
   }
 }
 
@@ -91,10 +135,22 @@ void handleNewSlave(const uint8_t *slave_mac) {
   // Verify if slave has been already added to the list
   for (uint8_t i = 0; i < slave_count; i++) {
     if (memcmp(slaves[i].mac_addr, slave_mac, 6) == 0){
-      Serial.println("Slave already acknowledged, resending START msg");
-      sendStartMsg(slave_mac);
+      Serial.println("Slave already acknowledged, resending START message");
+      sendMsg(slave_mac, START);
       return;
     }
+  }
+
+  // Add new slave as a peer
+  esp_now_peer_info_t peerInfo;
+  memset(&peerInfo, 0, sizeof(peerInfo));
+  memcpy(peerInfo.peer_addr, slave_mac, 6);
+  peerInfo.channel = 0; 
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add slave as a peer");
+    return;
   }
 
   // Add new slave to the list
@@ -105,22 +161,41 @@ void handleNewSlave(const uint8_t *slave_mac) {
   Serial.print("New slave added. Total slaves: ");
   Serial.println(slave_count);
 
-  sendStartMsg(slave_mac);
+  sendMsg(slave_mac, START);
 }
 
-
-void sendStartMsg(const uint8_t *slave_mac){
-  // Send START message to the new slave
-  Message start_message;
-  start_message.type = START;
-  memset(start_message.payload, 0, sizeof(start_message.payload)); // No payload needed
-
-  esp_err_t result = esp_now_send(slave_mac, (uint8_t *)&start_message, FRAME_SIZE[START]);
-
+void sendMsg(const uint8_t *dest_mac, MessageType msg_type, const uint8_t *payload) {
+  esp_err_t result = ESP_OK;
+  Message msg;
+  msg.type = msg_type;
+  switch (msg_type){
+    case START:
+      // Send START message to the new slave
+      result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      break;
+    case ACK:
+      // Send ACK message with payload
+      if (payload != nullptr){
+        memcpy(msg.payload, payload, SIZE_OF[msg_type] - sizeof(msg.type)); // 1 byte
+        result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
+      }
+      else{
+        Serial.println("ACK message requires payload.");
+        return;
+      }
+      break;
+    default:
+      Serial.println("Attempted to send unknown message type.");
+      return;
+  }
   if (result == ESP_OK) {
-    Serial.println("START message sent successfully.");
+    Serial.print(NAME[msg.type]);
+    Serial.println(" message sent successfully.");
   } else {
-    Serial.println("Error sending START message.");
+    Serial.print("Error sending message ");
+    Serial.print(NAME[msg.type]);
+    Serial.print(": ");
+    Serial.println(result);
   }
 }
 
@@ -134,42 +209,20 @@ void initializeEspNow() {
 
   // Register receive callback
   esp_now_register_recv_cb(onDataRecv);
+}
 
-  // Register the send callback
-  // esp_now_register_send_cb(onDataSent);
+void setup(){
+  Serial.begin(115200);
+  Serial.println("Master Setup");
 
-  // Configure peer (slave)
-  esp_now_peer_info_t peer_info;
-  memset(&peer_info, 0, sizeof(peer_info)); // Initialize to zero
-  memcpy(peer_info.peer_addr, SLAVE_ADDRESS, 6);
-  peer_info.channel = 0;
-  peer_info.encrypt = false;
+  initializeEspNow();
 
-  if (esp_now_add_peer(&peer_info) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    haltExecution();
-  }
+  // Initialize slaves info to zero
+  memset(&slaves, 0, sizeof(slaves));
+}
+
+void loop(){
+  // Nothing here
 }
 
 
-// ----------------------------
-// Setup Function
-// ----------------------------
-
-void setup() {
-    Serial.begin(115200);
-    Serial.println("Master Setup");
-
-    initializeEspNow();
-
-    // Initialize slaves info to zero
-    memset(&slaves, 0, sizeof(slaves));
-}
-
-// ----------------------------
-// Loop Function
-// ----------------------------
-
-void loop() {
-    // No actions needed in loop
-}
