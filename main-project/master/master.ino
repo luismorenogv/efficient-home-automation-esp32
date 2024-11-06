@@ -5,7 +5,6 @@
  * @author Luis Moreno
  * @date November 1, 2024
  */
-
 #include "master.h"
 #include <WiFi.h>
 
@@ -13,14 +12,9 @@
 // Global Variables
 // ----------------------------
 
-// Arrays to store temperature and humidity data
-float temperature_data[DATA_ARRAY_SIZE];
-float humidity_data[DATA_ARRAY_SIZE];
-int data_index = 0;  // Index to track data storage location
-
 // Array to hold information of connected slaves
 SlaveInfo slaves[MAX_SLAVES];
-int slave_count = 0;
+uint8_t slave_count = 0;
 
 // ----------------------------
 // Callback Function
@@ -34,84 +28,93 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *incoming_data, i
 
   MessageType msg_type = static_cast<MessageType>(incoming_data[0]);
 
+  if (len != SIZE_OF[msg_type]){
+    Serial.print("Received ");
+    Serial.print(NAME[msg_type]);
+    Serial.println(" with incorrect length");
+    return;
+  }
+
   switch (msg_type) {
     case IM_HERE:
+    {
       Serial.println("Received IM_HERE from a slave.");
-      handleNewSlave(info->src_addr);
-      break;
-
-    case SYNC:
-      Serial.println("Received SYNC from a slave.");
-      // Update last_sync_time
-      for (uint8_t i = 0; i < slave_count; i++) {
-        if (memcmp(info->src_addr, slaves[i].mac_addr, sizeof(slaves[i].mac_addr)) == 0) {
-          slaves[i].last_sync_time = millis();
-          break;
-        }
-      }
-      break;
+      // Extract payload
+      const uint8_t *payload = incoming_data + 1; // Skip message type
+      handleNewSlave(info->src_addr, payload);
+    }
+    break;
 
     case SENSOR_DATA:
-      if (len >= sizeof(MessageType) + sizeof(SensorData)) { // 1 byte type + 8 bytes data
+    {
+      // Extract sensor data
+      SensorData received_data;
+      memcpy(&received_data, incoming_data + 1, SIZE_OF[msg_type] - sizeof(uint8_t));
 
-        // Update last_sync_time for the slave
-        bool slave_found = false;
-        for (uint8_t i = 0; i < slave_count; i++) {
-          if (memcmp(info->src_addr, slaves[i].mac_addr, sizeof(slaves[i].mac_addr)) == 0) {
-            slaves[i].last_sync_time = millis();
-            slave_found = true;
-            break;
-          }
-        }
+      uint8_t id = received_data.id;
+      if (id < slave_count) {
+        // Store data
+        slaves[id].temperature[slaves[id].data_index] = received_data.temperature;
+        slaves[id].humidity[slaves[id].data_index] = received_data.humidity;
 
-        if (!slave_found) {
-          Serial.println("SENSOR_DATA received from an unknown slave.");
-          break;
-        }
-
-        // Send ACK for SENSOR_DATA
+        // Send ACK
         MessageType acked_msg = SENSOR_DATA;
-        sendMsg(info->src_addr, ACK, (uint8_t*)&acked_msg);
-
-        SensorData received_data;
-
-        memcpy(&received_data, incoming_data + 1, sizeof(SensorData));
+        sendMsg(slaves[id].mac_addr, ACK, (uint8_t*)&acked_msg, SIZE_OF[ACK]);
 
         // Print received sensor data
-        Serial.print("Temperature: ");
+        Serial.print("Slave ID ");
+        Serial.print(id);
+        Serial.print(" - Temperature: ");
         Serial.print(received_data.temperature);
         Serial.print(" °C, Humidity: ");
         Serial.print(received_data.humidity);
         Serial.println(" %");
 
-        // Store data in arrays
-        temperature_data[data_index] = received_data.temperature;
-        humidity_data[data_index] = received_data.humidity;
-
         // Update index
-        data_index = (data_index + 1) % DATA_ARRAY_SIZE;
-        Serial.print("Data index updated to: ");
-        Serial.println(data_index);
+        slaves[id].data_index = (slaves[id].data_index + 1) % DATA_ARRAY_SIZE;
+        Serial.print("Data index for Slave ID ");
+        Serial.print(id);
+        Serial.print(" updated to: ");
+        Serial.println(slaves[id].data_index);
       } else {
-        Serial.println("Received SENSOR_DATA with incorrect length.");
+        Serial.println("Received SENSOR_DATA from unknown slave ID.");
       }
-      break;
+    }
+    break;
+
+    case SYNC:
+    {
+      uint8_t id = incoming_data[1]; // ID está en payload
+      if (id < slave_count) {
+        if (slaves[id].last_sync_time != NOT_SYNCED){
+          int32_t offset_error = slaves[id].wake_up_period_ms - ((millis() - slaves[id].last_sync_time) % slaves[id].wake_up_period_ms);
+          Serial.print("Offset error for Slave ID ");
+          Serial.print(id);
+          Serial.print(": ");
+          Serial.println(offset_error);
+        }
+        slaves[id].last_sync_time = millis();
+        Serial.print("Received SYNC from slave ID ");
+        Serial.println(id);
+      } else {
+        Serial.println("Received SYNC from unknown slave ID.");
+      }
+    }
+    break;
 
     case ACK:
-      if (len >= 2 * sizeof(MessageType)) { // Type + payload
-        MessageType acked_msg = static_cast<MessageType>(incoming_data[1]);
-        Serial.print("Received ACK for message type: ");
-        Serial.println(NAME[acked_msg]);
-        // Handle ACK if needed
-      }
-      else{
-        Serial.println("ACK received with incorrect length.");
-      }
-      break;
+    {
+      MessageType acked_msg = static_cast<MessageType>(incoming_data[1]);
+      Serial.print("Received ACK for message type: ");
+      Serial.println(NAME[acked_msg]);
+    }
+    break;
 
     default:
+    {
       Serial.println("Received unknown or unhandled message type.");
-      break;
+    }
+    break;
   }
 }
 
@@ -126,7 +129,7 @@ void haltExecution() {
   }
 }
 
-void handleNewSlave(const uint8_t *slave_mac) {
+void handleNewSlave(const uint8_t *slave_mac, const uint8_t *payload) {
   if (slave_count >= MAX_SLAVES) {
     Serial.println("Maximum number of slaves reached.");
     return;
@@ -136,7 +139,9 @@ void handleNewSlave(const uint8_t *slave_mac) {
   for (uint8_t i = 0; i < slave_count; i++) {
     if (memcmp(slaves[i].mac_addr, slave_mac, 6) == 0){
       Serial.println("Slave already acknowledged, resending START message");
-      sendMsg(slave_mac, START);
+      // Resend START message with ID
+      uint8_t id_payload = slaves[i].id;
+      sendMsg(slave_mac, START, &id_payload, SIZE_OF[START]);
       return;
     }
   }
@@ -154,40 +159,41 @@ void handleNewSlave(const uint8_t *slave_mac) {
   }
 
   // Add new slave to the list
-  memcpy(slaves[slave_count].mac_addr, slave_mac, 6);
-  slaves[slave_count].last_sync_time = millis();
+  SlaveInfo &new_slave = slaves[slave_count];
+  new_slave.id = slave_count; // Assign ID as the index
+  memcpy(new_slave.mac_addr, slave_mac, 6);
+  new_slave.last_sync_time = NOT_SYNCED;
+
+  // Extract wake_up_period_ms and time_awake_ms from payload
+  memcpy(&new_slave.wake_up_period_ms, payload, sizeof(uint32_t));
+  memcpy(&new_slave.time_awake_ms, payload + sizeof(uint32_t), sizeof(uint32_t));
+
   slave_count++;
 
-  Serial.print("New slave added. Total slaves: ");
+  Serial.print("New slave added with ID: ");
+  Serial.println(new_slave.id);
+  Serial.print("Total slaves: ");
   Serial.println(slave_count);
 
-  sendMsg(slave_mac, START);
+  // Send START message with ID
+  uint8_t id_payload = new_slave.id;
+  sendMsg(slave_mac, START, &id_payload, SIZE_OF[START]);
 }
 
-void sendMsg(const uint8_t *dest_mac, MessageType msg_type, const uint8_t *payload) {
+void sendMsg(const uint8_t *dest_mac, MessageType msg_type, const uint8_t *payload, size_t size) {
   esp_err_t result = ESP_OK;
   Message msg;
   msg.type = msg_type;
-  switch (msg_type){
-    case START:
-      // Send START message to the new slave
-      result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
-      break;
-    case ACK:
-      // Send ACK message with payload
-      if (payload != nullptr){
-        memcpy(msg.payload, payload, SIZE_OF[msg_type] - sizeof(msg.type)); // 1 byte
-        result = esp_now_send(dest_mac, (uint8_t *)&msg, SIZE_OF[msg_type]);
-      }
-      else{
-        Serial.println("ACK message requires payload.");
-        return;
-      }
-      break;
-    default:
-      Serial.println("Attempted to send unknown message type.");
-      return;
+  memset(msg.payload, 0, sizeof(msg.payload)); // Clear payload
+
+  if (payload != nullptr && size > sizeof(msg.type)) {
+    memcpy(msg.payload, payload, size - sizeof(msg.type)); // Adjusted size
   }
+
+  size_t msg_size = size > 0 ? size : SIZE_OF[msg_type];
+
+  result = esp_now_send(dest_mac, (uint8_t *)&msg, msg_size);
+
   if (result == ESP_OK) {
     Serial.print(NAME[msg.type]);
     Serial.println(" message sent successfully.");
@@ -224,5 +230,3 @@ void setup(){
 void loop(){
   // Nothing here
 }
-
-
