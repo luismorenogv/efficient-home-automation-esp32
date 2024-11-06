@@ -11,6 +11,8 @@
  *
  *  MIT License
  */
+
+ #define ESP32
 #include <Arduino.h>
 
 #if !defined(ARDUINO_ESP32C3_DEV) // This is due to a bug in RISC-V compiler, which requires unused function sections :-(.
@@ -29,7 +31,6 @@
 
 unsigned long start = 0;
 void setup() {
-    pinMode(LED_BUILTIN, OUTPUT);
 
     Serial.begin(115200);
     while (!Serial)
@@ -55,6 +56,7 @@ void loop() {
       IrSender.sendPulseDistanceWidth(38, 3550, 1700, 450, 1300, 450, 400,
                                       0x600000004E02002, 64, PROTOCOL_IS_LSB_FIRST, 110, 0);
       start = millis();
+      Serial.println("IR signal sent.");
     }
 
     /*
