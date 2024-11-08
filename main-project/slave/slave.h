@@ -28,12 +28,15 @@ constexpr uint32_t MS_TO_US = 1000;
 constexpr uint32_t S_TO_MS = 1000;
 constexpr uint32_t MIN_TO_MS = 60000;
 
+// Leeway given the time the processor uses to go sleep and wake up
+constexpr uint32_t LEEWAY_MS = 45;
+
 // Communication Timing
 constexpr uint32_t DEFAULT_WAKE_UP_MS = (2 * MIN_TO_MS);
-constexpr uint32_t DEFAULT_TIME_AWAKE_MS = 5000;
+constexpr uint32_t DEFAULT_TIME_AWAKE_MS = 10000;
 
-constexpr uint8_t SENSOR_DATA_PERIOD = 4;
-constexpr uint8_t SYNC_PERIOD = 6;
+constexpr uint8_t SENSOR_DATA_PERIOD = 2;
+constexpr uint8_t SYNC_PERIOD = 3;
 
 constexpr uint16_t ACK_TIMEOUT_MS = 1000;
 constexpr uint16_t IM_HERE_TIMEOUT_MS = 2000;
