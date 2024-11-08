@@ -1,9 +1,9 @@
 /**
  * @file master.h
  * @brief Constants and Function Declarations for master.ino
- *
+ * 
  * @author Luis Moreno
- * @date November 1, 2024
+ * @date November 8, 2024
  */
 
 #ifndef __MASTER_H__
@@ -21,22 +21,26 @@ constexpr uint8_t MAX_SLAVES = 3;          // Maximum number of slaves
 
 constexpr uint32_t MIN_TO_MS = 60000;
 
-const uint32_t NOT_SYNCED = 0;
+constexpr uint8_t MAX_PENDING_ACTIONS = 8; // Maximum number of pending actions per slave
+
 // ----------------------------
 // Structures
 // ----------------------------
 
-// Slave information structure
-typedef struct {
+/**
+ * @brief Slave information structure.
+ */
+struct SlaveInfo {
   uint8_t id = NO_ID;                // ID assigned to the slave by the master
-  uint8_t mac_addr[6];               // MAC address of the slave
-  uint32_t wake_up_period_ms;        // Time between each wake-up in milliseconds
+  uint8_t mac_addr[MAC_ADDRESS_LENGTH]; // MAC address of the slave
+  uint32_t wake_up_period_ms;        // Time between each wake-up in milliseconds 
   uint32_t time_awake_ms;            // Time the slave stays awake in milliseconds
-  uint32_t last_sync_time;           // Last synchronization time (millis)
-  float temperature[DATA_ARRAY_SIZE]; // Array holding temperatures from the slave
+  float temperature[DATA_ARRAY_SIZE];// Array holding temperatures from the slave
   float humidity[DATA_ARRAY_SIZE];   // Array holding humidity values from the slave
-  uint16_t data_index = 0;
-} SlaveInfo;
+  uint16_t data_index = 0;           // Index for data arrays
+  uint8_t pending_actions[MAX_PENDING_ACTIONS]; // Array of pending actions for the slave
+  uint8_t action_index = 0;          // Number of pending actions
+};
 
 // ----------------------------
 // Function Declarations
@@ -79,5 +83,14 @@ void handleNewSlave(const uint8_t *slave_mac, const uint8_t *payload);
  */
 void sendMsg(const uint8_t *dest_mac, MessageType msg_type, const uint8_t *payload = nullptr, size_t size = 0);
 
+/**
+ * @brief Handles a REQ message from a slave and sends ACTION message in response.
+ *
+ * @param slave_mac MAC address of the slave.
+ * @param slave_id ID of the slave.
+ */
+void handleReq(const uint8_t *slave_mac, uint8_t slave_id);
+
 #endif /* __MASTER_H__ */
+
 
