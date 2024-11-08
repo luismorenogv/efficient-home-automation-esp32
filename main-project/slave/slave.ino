@@ -220,7 +220,7 @@ void loop(){
     }
 
     // Calculate sleep duration
-    unsigned long sleep_duration = wake_up_period_ms - (millis() - wake_up_instant);
+    unsigned long sleep_duration = wake_up_period_ms - (millis() - wake_up_instant) - LEEWAY_MS;
     if (sleep_duration < 0) sleep_duration = 0; // Error handling
 
     Serial.print("Sleeping for: ");
