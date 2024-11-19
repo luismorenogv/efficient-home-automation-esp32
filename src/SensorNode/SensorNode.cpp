@@ -6,20 +6,27 @@
  * @date Nov 16, 2024
  */
 
-
 #include "SensorNode.h"
 #include <cstring>
 
-// Inicializar la instancia estática
+// Initialize the static instance
 SensorNode* SensorNode::instance = nullptr;
 
+// Define the Master MAC address here to avoid multiple definitions
+const uint8_t *master_mac = esp32s3_mac;
+
 // Constructor
-SensorNode::SensorNode(uint8_t room_id) : room_id(room_id), wake_interval(DEFAULT_WAKE_INTERVAL), dht(DHT_PIN, DHT_TYPE), ack_received(false) {
-    // Assign instance
+SensorNode::SensorNode(uint8_t room_id) 
+    : room_id(room_id), 
+      wake_interval(DEFAULT_WAKE_INTERVAL), 
+      dht(DHT_PIN, DHT_TYPE), 
+      ack_received(false) 
+{
+    // Assign the singleton instance
     instance = this;
 }
 
-// Static callback function
+// Static callback function for ESPNOW data reception
 void SensorNode::onDataRecvStatic(const uint8_t *mac_addr, const uint8_t *data, int len) {
     if (len < 1) {
         Serial.println("Received empty message.");
@@ -50,7 +57,6 @@ void SensorNode::onDataRecvStatic(const uint8_t *mac_addr, const uint8_t *data, 
         }  
         break;
     }
-    
 }
 
 // Initialize Sensor Node
@@ -60,9 +66,9 @@ void SensorNode::initialize() {
     // Initialize DHT22 sensor
     dht.begin();
 
-    // Initialize Wi-Fi
+    // Initialize Wi-Fi in Station Mode
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect(); // Lower
+    WiFi.disconnect();
 
     // Initialize ESPNOW
     if (esp_now_init() != ESP_OK) {

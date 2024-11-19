@@ -2,13 +2,13 @@
  * @file main.cpp 
  * @brief Main file for Sensor Node.
  * 
- * @autor Luis Moreno
- * @date April 27, 2024
+ * @author Luis Moreno
+ * @date Nov 16, 2024
  */
 
 #include "SensorNode.h"
 
-// Define Sensor ID (unique for each sensor node)
+// Define Room ID (unique for each sensor node)
 constexpr uint8_t ROOM_ID = 0;
 
 SensorNode sensorNode(ROOM_ID);
@@ -27,5 +27,6 @@ void setup() {
 }
 
 void loop() {
-    // Not needed
+    // Not needed as the device sleeps after setup
 }
+
