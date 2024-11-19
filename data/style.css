@@ -1,0 +1,30 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: #f0f0f0;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+#charts-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.chart-box {
+    width: 45%;
+    margin: 20px;
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 800px) {
+    .chart-box {
+        width: 90%;
+    }
+}
