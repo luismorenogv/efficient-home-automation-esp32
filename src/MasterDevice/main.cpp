@@ -1,20 +1,20 @@
 /**
- * @file main.cpp 
- * @brief Main file for Master Node.
+ * @file MasterDevice.cpp 
+ * @brief Main code of the master device
  * 
  * @author Luis Moreno
- * @date Nov 16, 2024
+ * @date Nov 19, 2024
  */
 
 #include "MasterDevice.h"
 
-MasterDevice master;
-
 void setup() {
-    master.initialize();
+    MasterDevice::getInstance()->start();
 }
 
 void loop() {
-    // Nothing needed here as operations are handled asynchronously
+    // Empty loop since tasks handle functionality
+    vTaskDelete(NULL); // Delete the loop task
 }
+
 

@@ -79,7 +79,7 @@ void SensorNode::initialize() {
     // Register master as peer
     memset(&master_peer, 0, sizeof(master_peer));
     memcpy(master_peer.peer_addr, master_mac, MAC_ADDRESS_LENGTH);
-    master_peer.channel = 0;  
+    master_peer.channel = 1;  
     master_peer.encrypt = false;
 
     if (esp_now_add_peer(&master_peer) != ESP_OK){
@@ -106,9 +106,23 @@ void SensorNode::sendData() {
         return;
     }
 
+    // Convert MAC address to readable string
+    char macStr[18]; // MAC address as string (XX:XX:XX:XX:XX:XX)
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             master_mac[0], master_mac[1], master_mac[2],
+             master_mac[3], master_mac[4], master_mac[5]);
+
+    // Print the MAC address
+    Serial.print("Sending data to MAC address: ");
+    Serial.println(macStr);
+
+    Serial.printf("Data {Temp: %.2f, Humid: %.2f}", msg.temperature, msg.humidity);
+
+    // Send the data
     esp_now_send(master_peer.peer_addr, reinterpret_cast<uint8_t*>(&msg), sizeof(TempHumidMsg));
     Serial.println("Sensor data sent to master");
 }
+
 
 // Wait for ACK with timeout and retries
 bool SensorNode::waitForAck() {
@@ -140,5 +154,6 @@ bool SensorNode::waitForAck() {
 // Enter Deep Sleep
 void SensorNode::enterDeepSleep() {
     Serial.println("Entering deep sleep");
+    esp_sleep_enable_timer_wakeup(wake_interval * 1000);
     esp_deep_sleep_start();
 }

@@ -4,14 +4,25 @@
     <meta charset="UTF-8">
     <title>Home Automation Dashboard</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Include Chart.js (version 3.x) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+
+    <!-- Include Moment.js -->
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4"></script>
+
+    <!-- Include the Chart.js Moment.js adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0"></script>
+
+    <!-- Include favicon -->
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1946/1946488.png" type="image/png">
 </head>
 <body>
-    <h1>Home Automation Dashboard</h1>
-    <div id="charts-container">
-        <!-- Charts will be dynamically inserted here -->
+    <h1>Efficient Home Automation Dashboard</h1>
+    <div id="sensor-data">
+        <!-- Sensor data will be displayed here -->
     </div>
 
-    <script src="/script.js"></script>
+    <script src="/script.js" defer></script>
 </body>
 </html>

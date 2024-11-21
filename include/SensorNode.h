@@ -21,7 +21,7 @@ constexpr uint8_t MAX_RETRIES = 3;
 constexpr unsigned long DEFAULT_WAKE_INTERVAL = 300000;
 
 // Timeout for ACK in milliseconds
-constexpr unsigned long ACK_TIMEOUT = 2000;
+constexpr unsigned long ACK_TIMEOUT = 5000;
 
 // DHT22 Pin Configuration
 constexpr uint8_t DHT_PIN = 4; // GPIO pin connected to DHT22
