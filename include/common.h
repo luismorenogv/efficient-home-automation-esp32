@@ -3,12 +3,13 @@
  * @brief Shared Constants, Enums, and Structures for Master and Sensor Nodes
  * 
  * @author Luis Moreno
- * @date Nov 16, 2024
+ * @date Nov 19, 2024
  */
 
 #pragma once
 
 #include <Arduino.h>
+#include <time.h>
 
 // Constants
 constexpr uint8_t MAC_ADDRESS_LENGTH = 6;
@@ -29,12 +30,10 @@ struct AckMsg {
     MessageType acked_msg; // Acknowledged message type
 } __attribute__((packed));
 
-// Temperature and Humidity Data Structure
+// Temperature and Humidity Data Structure with Timestamp
 struct TempHumidMsg {
     MessageType type;   
     uint8_t room_id;
     float temperature;
     float humidity;
 } __attribute__((packed));
-
-
