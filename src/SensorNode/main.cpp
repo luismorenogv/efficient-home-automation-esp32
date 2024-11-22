@@ -1,32 +1,25 @@
 /**
- * @file main.cpp 
- * @brief Main file for Sensor Node.
+ * @file main.cpp
+ * @brief Main file for SensorNode
  * 
  * @author Luis Moreno
- * @date Nov 16, 2024
+ * @date Nov 22, 2024
  */
 
-#include "SensorNode.h"
+#include <Arduino.h>
+#include "SensorNode/SensorNode.h"
+#include "SensorConfig.h"
 
-// Define Room ID (unique for each sensor node)
-constexpr uint8_t ROOM_ID = 0;
 
 SensorNode sensorNode(ROOM_ID);
 
 void setup() {
     sensorNode.initialize();
-
-    if (sensorNode.waitForAck()) {
-        Serial.println("Data successfully sent and ACK received");
-    } else {
-        Serial.println("Data transmission failed");
-    }
-    
-    // Enter deep sleep for the wake_interval duration
-    sensorNode.enterDeepSleep();
+    sensorNode.run();
+    sensorNode.goSleep();
 }
 
 void loop() {
-    // Not needed as the device sleeps after setup
+    // Not used as the device sleeps after setup
 }
 
