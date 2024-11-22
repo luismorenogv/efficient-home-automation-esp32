@@ -1,9 +1,9 @@
 /**
- * @file common.h 
- * @brief Shared Constants, Enums, and Structures for Master and Sensor Nodes
- * 
+ * @file common.h
+ * @brief Shared constants, enums, and structures for Master and Sensor Nodes
+ *
  * @author Luis Moreno
- * @date Nov 19, 2024
+ * @date Nov 21, 2024
  */
 
 #pragma once
@@ -21,7 +21,7 @@ const char* const NAME[TOTAL_FRAMES] = {"ACK", "TEMP_HUMID_DATA"};
 // Message Types
 enum class MessageType : uint8_t {
     ACK        = 0x00,     // Acknowledge message reception 
-    TEMP_HUMID = 0x01,     // Slave to Master: Sends sensor data
+    TEMP_HUMID = 0x01,     // SensorNode to MasterDevice: Sends sensor data
 };
 
 // ACK Message Structure
@@ -30,7 +30,7 @@ struct AckMsg {
     MessageType acked_msg; // Acknowledged message type
 } __attribute__((packed));
 
-// Temperature and Humidity Data Structure with Timestamp
+// Temperature and Humidity Data Structure
 struct TempHumidMsg {
     MessageType type;   
     uint8_t room_id;

@@ -48,14 +48,34 @@ h1 {
     background-color: rgba(0,0,0,0.4);
 }
 
+/* Adjust the modal content for better responsiveness */
 .modal-content {
     background-color: #fefefe;
-    margin: 10% auto;
-    padding: 20px;
+    margin: 5% auto;
+    padding: 10px;
     border: 1px solid #888;
-    width: 80%;
+    width: 90%;
     max-width: 800px;
+    position: relative;
 }
+
+/* Make the canvas take full width of the modal */
+.modal-content canvas {
+    width: 100% !important;
+    height: 400px !important;
+}
+
+/* Adjust close button positioning */
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
 
 .close-button {
     color: #aaa;

@@ -56,6 +56,12 @@ function showHistoryModal(roomId) {
 }
 
 function displayHistoryModal(data) {
+    // Remove existing modal if any
+    const existingModal = document.querySelector('.modal');
+    if (existingModal) {
+        document.body.removeChild(existingModal);
+    }
+
     // Create modal elements
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -79,23 +85,9 @@ function displayHistoryModal(data) {
     document.body.appendChild(modal);
 
     // Prepare data for chart
-    const timestamps = data.timestamps.map(ts => new Date(ts*1000)); // Timestamps in milliseconds
+    const timestamps = data.timestamps.map(ts => new Date(ts * 1000)); // Timestamps in milliseconds
     const temperatures = data.temperature;
     const humidities = data.humidity;
-
-    // Log data lengths
-    console.log('Data lengths:', {
-        timestamps: timestamps.length,
-        temperatures: temperatures.length,
-        humidities: humidities.length
-    });
-
-    // Log first few entries
-    console.log('Sample data:', {
-        timestamps: timestamps.slice(0, 5),
-        temperatures: temperatures.slice(0, 5),
-        humidities: humidities.slice(0, 5)
-    });
 
     // Check for data consistency
     if (timestamps.length !== temperatures.length || temperatures.length !== humidities.length) {
@@ -103,13 +95,23 @@ function displayHistoryModal(data) {
         return;
     }
 
-    // Log first few entries
-    console.log('Sample data:', {
-        timestamps: timestamps.slice(0, 5).map(ts => ts.toLocaleString()),
-        temperatures: temperatures.slice(0, 5),
-        humidities: humidities.slice(0, 5)
-    });
+    // Calculate min and max values for temperature
+    const minTemp = Math.min(...temperatures);
+    const maxTemp = Math.max(...temperatures);
+    const tempRange = maxTemp - minTemp || 1; // Avoid division by zero
+    const tempPadding = tempRange * 0.3;
 
+    const tempMin = minTemp - tempPadding;
+    const tempMax = maxTemp + tempPadding;
+
+    // Calculate min and max values for humidity
+    const minHumid = Math.min(...humidities);
+    const maxHumid = Math.max(...humidities);
+    const humidRange = maxHumid - minHumid || 1; // Avoid division by zero
+    const humidPadding = humidRange * 0.3;
+
+    const humidMin = minHumid - humidPadding;
+    const humidMax = maxHumid + humidPadding;
 
     // Create chart using Chart.js
     const ctx = canvas.getContext('2d');
@@ -122,28 +124,32 @@ function displayHistoryModal(data) {
                     label: 'Temperature (°C)',
                     data: temperatures,
                     borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
                     fill: false,
                     yAxisID: 'y',
-                    tension: 0.1
+                    tension: 0.1,
+                    pointRadius: 0 // Hide data points for cleaner look
                 },
                 {
                     label: 'Humidity (%)',
                     data: humidities,
                     borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
                     fill: false,
                     yAxisID: 'y1',
-                    tension: 0.1
+                    tension: 0.1,
+                    pointRadius: 0 // Hide data points for cleaner look
                 }
             ]
         },
         options: {
-            // parsing: false,
             normalized: true,
             scales: {
                 x: {
                     type: 'time',
                     time: {
                         unit: 'minute',
+                        stepSize: 10, // Display labels every 10 minutes
                         tooltipFormat: 'HH:mm:ss',
                         displayFormats: {
                             minute: 'HH:mm',
@@ -153,12 +159,16 @@ function displayHistoryModal(data) {
                     title: {
                         display: true,
                         text: 'Time'
+                    },
+                    ticks: {
+                        maxRotation: 0,
+                        autoSkip: true,
                     }
                 },
                 y: {
-                    beginAtZero: true,
-                    suggestedMin: 15, // Adjust based on expected temperature range
-                    suggestedMax: 35,
+                    beginAtZero: false,
+                    min: tempMin,
+                    max: tempMax,
                     position: 'left',
                     title: {
                         display: true,
@@ -166,9 +176,9 @@ function displayHistoryModal(data) {
                     }
                 },
                 y1: {
-                    beginAtZero: true,
-                    suggestedMin: 20, // Adjust based on expected humidity range
-                    suggestedMax: 100,
+                    beginAtZero: false,
+                    min: humidMin,
+                    max: humidMax,
                     position: 'right',
                     grid: {
                         drawOnChartArea: false,
@@ -178,7 +188,23 @@ function displayHistoryModal(data) {
                         text: 'Humidity (%)'
                     }
                 }
-            }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            maintainAspectRatio: false,
+            responsive: true,
         }
     });
 }
@@ -227,4 +253,3 @@ function updateSensorData(data) {
     const date = new Date(data.timestamp * 1000);
     document.getElementById(`time-${data.room_id}`).textContent = `Last Updated: ${date.toLocaleString()}`;
 }
-
