@@ -8,7 +8,7 @@
 
 #include "MasterDevice/WebSockets.h"
 
-WebSockets::WebSockets(DataManager& dataManager) : ws("/ws"), dataManager(dataManager) {
+WebSockets::WebSockets(DataManager& dataManager) : ws("/ws"), dataManager(dataManager), pollingPeriodCallback(nullptr) {
 }
 
 void WebSockets::initialize(AsyncWebServer& server) {
@@ -20,12 +20,15 @@ void WebSockets::initialize(AsyncWebServer& server) {
     server.addHandler(&ws);
 }
 
+void WebSockets::setPollingPeriodCallback(void (*callback)(uint8_t, uint32_t)) {
+    pollingPeriodCallback = callback;
+}
+
 void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
-                               void* arg, uint8_t* data, size_t len) {
+                         void* arg, uint8_t* data, size_t len) {
     if (type == WS_EVT_CONNECT) {
         Serial.printf("WebSocket client %u connected\r\n", client->id());
 
-        // Send the latest data to the newly connected client
         for (uint8_t i = 0; i < NUM_ROOMS; ++i) {
             const RoomData& room = dataManager.getRoomData(i);
             if (room.valid_data_points > 0) {
@@ -37,6 +40,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
                 obj["temperature"] = room.temperature[idx];
                 obj["humidity"] = room.humidity[idx];
                 obj["timestamp"] = room.timestamps[idx];
+                obj["wake_interval_ms"] = room.wake_interval_ms;
 
                 String jsonString;
                 serializeJson(doc, jsonString);
@@ -47,13 +51,56 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
     } else if (type == WS_EVT_DISCONNECT) {
         Serial.printf("WebSocket client %u disconnected\r\n", client->id());
     } else if (type == WS_EVT_DATA) {
-        // Handle incoming messages
         AwsFrameInfo* info = (AwsFrameInfo*)arg;
         if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
             String msg = String((char*)data).substring(0, len);
-            if (msg.startsWith("getHistory:")) {
-                uint8_t room_id = msg.substring(strlen("getHistory:")).toInt();
-                sendHistoryData(client, room_id);
+            Serial.printf("Received message from client: %s\n", msg.c_str());
+
+            DynamicJsonDocument doc(256);
+            DeserializationError error = deserializeJson(doc, msg);
+            if (error) {
+                Serial.println("Failed to parse JSON message");
+                return;
+            }
+
+            if (doc.containsKey("action") && doc["action"].as<String>() == "setPollingPeriod") {
+                uint8_t room_id = doc["room_id"];
+                String periodStr = doc["polling_period"].as<String>(); // e.g., "5min", "15min", etc.
+
+                uint32_t period_ms = 0;
+                if (periodStr == "5min") {
+                    period_ms = 5 * 60 * 1000;
+                } else if (periodStr == "15min") {
+                    period_ms = 15 * 60 * 1000;
+                } else if (periodStr == "30min") {
+                    period_ms = 30 * 60 * 1000;
+                } else if (periodStr == "1h") {
+                    period_ms = 60 * 60 * 1000;
+                } else if (periodStr == "3h") {
+                    period_ms = 3 * 60 * 60 * 1000;
+                } else if (periodStr == "6h") {
+                    period_ms = 6 * 60 * 60 * 1000;
+                } else {
+                    Serial.println("Unknown polling period received");
+                    return;
+                }
+
+                Serial.printf("Setting polling period for room %u to %u ms\n", room_id, period_ms);
+
+                if (pollingPeriodCallback) {
+                    pollingPeriodCallback(room_id, period_ms);
+                }
+
+                // Send confirmation to the client
+                DynamicJsonDocument respDoc(128);
+                JsonObject respObj = respDoc.to<JsonObject>();
+                respObj["status"] = "success";
+                respObj["room_id"] = room_id;
+                respObj["new_polling_period_ms"] = period_ms;
+
+                String respStr;
+                serializeJson(respDoc, respStr);
+                client->text(respStr);
             }
         }
     }
@@ -78,10 +125,8 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     uint16_t count = room.valid_data_points;
     uint16_t idx = room.index;
 
-    // Determine the starting index for the oldest data point
     uint16_t startIdx = (idx + MAX_DATA_POINTS - count) % MAX_DATA_POINTS;
 
-    // Collect data in chronological order
     for (uint16_t i = 0; i < count; ++i) {
         uint16_t index = (startIdx + i) % MAX_DATA_POINTS;
 
@@ -89,7 +134,6 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
         float humid = room.humidity[index];
         time_t ts = room.timestamps[index];
 
-        // Skip invalid entries
         if (ts == 0) continue;
 
         tempArray.add(temp);
@@ -108,7 +152,7 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
     if (room_id >= NUM_ROOMS) return;
 
     const RoomData& room = dataManager.getRoomData(room_id);
-    uint16_t idx = room.index == 0 ? MAX_DATA_POINTS - 1 : room.index - 1; // Latest data point
+    uint16_t idx = room.index == 0 ? MAX_DATA_POINTS - 1 : room.index - 1;
 
     DynamicJsonDocument doc(256);
     JsonObject obj = doc.to<JsonObject>();
@@ -117,6 +161,7 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
     obj["temperature"] = room.temperature[idx];
     obj["humidity"] = room.humidity[idx];
     obj["timestamp"] = room.timestamps[idx];
+    obj["wake_interval_ms"] = room.wake_interval_ms;
 
     String jsonString;
     serializeJson(doc, jsonString);

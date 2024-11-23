@@ -128,7 +128,7 @@ function displayHistoryModal(data) {
                     fill: false,
                     yAxisID: 'y',
                     tension: 0.1,
-                    pointRadius: 0 // Hide data points for cleaner look
+                    pointRadius: 0
                 },
                 {
                     label: 'Humidity (%)',
@@ -138,7 +138,7 @@ function displayHistoryModal(data) {
                     fill: false,
                     yAxisID: 'y1',
                     tension: 0.1,
-                    pointRadius: 0 // Hide data points for cleaner look
+                    pointRadius: 0
                 }
             ]
         },
@@ -149,7 +149,7 @@ function displayHistoryModal(data) {
                     type: 'time',
                     time: {
                         unit: 'minute',
-                        stepSize: 10, // Display labels every 10 minutes
+                        stepSize: 10,
                         tooltipFormat: 'HH:mm:ss',
                         displayFormats: {
                             minute: 'HH:mm',
@@ -217,11 +217,11 @@ function updateSensorData(data) {
     if (!roomDiv) {
         // Create new room element
         roomDiv = document.createElement('div');
-        roomDiv.className = 'room-box';
+        roomDiv.className = 'room';
         roomDiv.id = `room-${data.room_id}`;
 
         const title = document.createElement('h2');
-        title.textContent = `${data.room_name}`;  // Correctly set room_name
+        title.textContent = `${data.room_name}`;
         roomDiv.appendChild(title);
 
         const tempPara = document.createElement('p');
@@ -236,13 +236,42 @@ function updateSensorData(data) {
         timePara.id = `time-${data.room_id}`;
         roomDiv.appendChild(timePara);
 
-        // Add button to show historical data
-        const historyButton = document.createElement('button');
-        historyButton.textContent = 'Show History';
-        historyButton.onclick = () => {
-            showHistoryModal(data.room_id);
+        // Add polling interval dropdown
+        const pollingLabel = document.createElement('label');
+        pollingLabel.setAttribute('for', `polling-${data.room_id}`);
+        pollingLabel.textContent = `Polling Interval: `;
+        roomDiv.appendChild(pollingLabel);
+
+        const pollingSelect = document.createElement('select');
+        pollingSelect.id = `polling-${data.room_id}`;
+        const options = [
+            { text: '5 min', value: '5min' },
+            { text: '15 min', value: '15min' },
+            { text: '30 min', value: '30min' },
+            { text: '1 h', value: '1h' },
+            { text: '3 h', value: '3h' },
+            { text: '6 h', value: '6h' },
+        ];
+
+        options.forEach(opt => {
+            const optionElement = document.createElement('option');
+            optionElement.value = opt.value;
+            optionElement.textContent = opt.text;
+            pollingSelect.appendChild(optionElement);
+        });
+
+        pollingSelect.onchange = () => {
+            const selected = pollingSelect.value;
+            const message = {
+                action: "setPollingPeriod",
+                room_id: data.room_id,
+                polling_period: selected
+            };
+            socket.send(JSON.stringify(message));
+            console.log(`Sent polling period update: ${JSON.stringify(message)}`);
         };
-        roomDiv.appendChild(historyButton);
+
+        roomDiv.appendChild(pollingSelect);
 
         container.appendChild(roomDiv);
     }
@@ -252,4 +281,28 @@ function updateSensorData(data) {
     document.getElementById(`humid-${data.room_id}`).textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
     const date = new Date(data.timestamp * 1000);
     document.getElementById(`time-${data.room_id}`).textContent = `Last Updated: ${date.toLocaleString()}`;
+
+    // Update polling interval dropdown if necessary
+    if (document.getElementById(`polling-${data.room_id}`)) {
+        document.getElementById(`polling-${data.room_id}`).value = pollingMsToStr(data.wake_interval_ms);
+    }
+}
+
+function pollingMsToStr(ms) {
+    switch(ms) {
+        case 300000:
+            return '5min';
+        case 900000:
+            return '15min';
+        case 1800000:
+            return '30min';
+        case 3600000:
+            return '1h';
+        case 10800000:
+            return '3h';
+        case 21600000:
+            return '6h';
+        default:
+            return '5min';
+    }
 }

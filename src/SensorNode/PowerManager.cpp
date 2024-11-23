@@ -8,7 +8,6 @@
 
 #include "SensorNode/PowerManager.h"
 #include <esp_sleep.h>
-#include <Arduino.h>
 
 PowerManager::PowerManager(unsigned long wake_interval_ms) : wake_interval_ms(wake_interval_ms) {
 }
@@ -22,4 +21,12 @@ void PowerManager::enterDeepSleep() {
 void PowerManager::enterPermanentDeepSleep() {
     Serial.println("Disconnecting from the network");
     esp_deep_sleep_start();
+}
+
+void PowerManager::updateSleepPeriod(uint32_t new_wake_interval_ms){
+    wake_interval_ms = new_wake_interval_ms;
+}
+
+uint32_t PowerManager::returnWakeInterval(){
+    return wake_interval_ms;
 }

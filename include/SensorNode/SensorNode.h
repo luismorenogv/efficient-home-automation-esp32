@@ -18,6 +18,7 @@ public:
     void initialize();
     void run();
     void goSleep();
+    bool joinNetwork();
 
 private:
     uint8_t room_id;

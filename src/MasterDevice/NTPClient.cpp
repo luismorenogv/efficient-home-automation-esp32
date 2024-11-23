@@ -30,7 +30,7 @@ void NTPClient::initialize() {
         Serial.println("Failed to synchronize time after multiple attempts");
     } else {
         time_t now = time(nullptr);
-        Serial.printf("Time synchronized: %ld\n", now);
+        Serial.printf("Time synchronized: %ld\r\n", now);
         Serial.println(&timeinfo, "Current time: %A, %B %d %Y %H:%M:%S");
     }
 }
