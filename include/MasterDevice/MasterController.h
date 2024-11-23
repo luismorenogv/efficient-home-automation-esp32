@@ -33,6 +33,7 @@ private:
     TaskHandle_t webServerTaskHandle;
     QueueHandle_t espnowQueue;
 
+    static void pollingPeriodChangedCallback(uint8_t room_id, uint32_t new_period_ms);
     static void espnowTask(void* pvParameter);
     static void webServerTask(void* pvParameter);
 };

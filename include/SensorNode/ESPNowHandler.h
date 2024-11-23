@@ -11,13 +11,14 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include "SensorConfig.h"
+#include "PowerManager.h"
 #include "common.h"
 
 class ESPNowHandler {
 public:
-    ESPNowHandler();
+    ESPNowHandler(PowerManager& powerManager);
     bool initializeESPNOW(const uint8_t* master_mac_address);
-    void sendData(const TempHumidMsg& data);
+    void sendMsg(const uint8_t* data, size_t size);
     bool waitForAck(MessageType expected_ack, unsigned long timeout_ms);
 
 private:
@@ -25,6 +26,8 @@ private:
     void onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len);
 
     static ESPNowHandler* instance;
+
+    PowerManager& powerManager;
 
     esp_now_peer_info_t master_peer;
     volatile bool ack_received;
