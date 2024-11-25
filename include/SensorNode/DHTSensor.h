@@ -3,14 +3,14 @@
  * @brief Declaration of DHTSensor class for reading from the DHT sensor
  *
  * @author Luis Moreno
- * @date Nov 22, 2024
+ * @date Nov 25, 2024
  */
 
 #pragma once
 
 #include <DHT.h>
 
-
+constexpr uint8_t DHT_TYPE = DHT22;
 
 class DHTSensor {
 public:
