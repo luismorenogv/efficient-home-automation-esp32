@@ -3,7 +3,7 @@
  * @brief Declaration of SensorNode class for handling sensor readings and ESP-NOW communication
  *
  * @author Luis Moreno
- * @date Nov 22, 2024
+ * @date Nov 25, 2024
  */
 
 #pragma once
@@ -14,10 +14,11 @@
 
 class SensorNode {
 public:
-    SensorNode(uint8_t room_id);
-    void initialize();
+    SensorNode(const uint8_t room_id, uint32_t* sleep_duration);
+    bool initialize(uint8_t wifi_channel);
     void run();
     void goSleep();
+    bool joinNetwork();
 
 private:
     uint8_t room_id;
