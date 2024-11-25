@@ -3,7 +3,7 @@
  * @brief Declaration of WebSockets class for handling WebSocket communication with clients
  *
  * @author Luis Moreno
- * @date Nov 21, 2024
+ * @date Nov 25, 2024
  */
 
 #pragma once
@@ -17,12 +17,12 @@ public:
     WebSockets(DataManager& dataManager);
     void initialize(AsyncWebServer& server);
     void sendDataUpdate(uint8_t room_id);
-    void setPollingPeriodCallback(void (*callback)(uint8_t, uint32_t));
+    void setSleepDurationCallback(void (*callback)(uint8_t, uint32_t));
 
 private:
     AsyncWebSocket ws;
     DataManager& dataManager;
-    void (*pollingPeriodCallback)(uint8_t, uint32_t);
+    void (*sleepDurationCallback)(uint8_t, uint32_t);
 
     void onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                  void* arg, uint8_t* data, size_t len);
