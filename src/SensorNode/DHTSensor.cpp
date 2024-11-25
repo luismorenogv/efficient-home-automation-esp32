@@ -3,7 +3,7 @@
  * @brief Implementation of DHTSensor class for reading from the DHT sensor
  *
  * @author Luis Moreno
- * @date Nov 22, 2024
+ * @date Nov 25, 2024
  */
 
 #include "SensorNode/DHTSensor.h"
