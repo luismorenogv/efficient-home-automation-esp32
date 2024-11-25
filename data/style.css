@@ -29,6 +29,12 @@ h1 {
     margin-bottom: 10px;
 }
 
+.room-box button {
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
 @media (max-width: 800px) {
     .room-box {
         width: 95%;

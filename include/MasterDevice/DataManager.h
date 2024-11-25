@@ -3,7 +3,7 @@
  * @brief Declaration of DataManager class for managing sensor data storage and retrieval
  *
  * @author Luis Moreno
- * @date Nov 21, 2024
+ * @date Nov 25, 2024
  */
 
 #pragma once
@@ -11,7 +11,7 @@
 #include <Arduino.h>
 #include <time.h>
 #include "common.h"
-#include "MasterConfig.h"
+#include "config.h"
 #include <freertos/semphr.h>
 
 struct RoomData {
@@ -19,14 +19,15 @@ struct RoomData {
     float temperature[MAX_DATA_POINTS];
     float humidity[MAX_DATA_POINTS];
     time_t timestamps[MAX_DATA_POINTS];
-    uint32_t wake_interval_ms;         // Current wake interval
+    uint32_t sleep_period_ms;
     uint16_t index;
     uint16_t valid_data_points;
-    bool wake_up_interval_updated;     // Flag to indicate polling period update
-    uint32_t new_wake_up_interval;       // New pollin period to be set
+    bool pending_update;
+    uint32_t new_sleep_period_ms; 
+    bool registered;
 
-    RoomData() : wake_interval_ms(0), index(0), valid_data_points(0),
-                 wake_up_interval_updated(true), new_wake_up_interval(0)  {
+    RoomData() : sleep_period_ms(DEFAULT_SLEEP_DURATION), index(0), valid_data_points(0),
+                 pending_update(false), new_sleep_period_ms(DEFAULT_SLEEP_DURATION), registered(false) {
         memset(temperature, 0, sizeof(temperature));
         memset(humidity, 0, sizeof(humidity));
         memset(timestamps, 0, sizeof(timestamps));
@@ -37,17 +38,21 @@ struct RoomData {
 class DataManager {
 public:
     DataManager();
-    void addData(uint8_t room_id, float temperature, float humidity, time_t timestamp);
-    const RoomData& getRoomData(uint8_t room_id) const;
-    void setMacAddr(uint8_t room_id, const uint8_t* mac_addr);
-    const uint8_t* getMacAddr(uint8_t room_id) const;   
-    void setWakeInterval(uint8_t room_id, uint32_t wake_interval_ms);
-    uint32_t getWakeInterval(uint8_t room_id) const;   
-    void setPollingPeriodUpdate(uint8_t room_id, uint32_t new_period_ms);
-    bool isPollingPeriodUpdated(uint8_t room_id) const;
-    uint32_t getNewPollingPeriod(uint8_t room_id) const;         
+    // Delete copy constructor and copy assignment operator
+    DataManager(const DataManager&) = delete;
+    DataManager& operator=(const DataManager&) = delete;
 
+    void addSensorData(uint8_t room_id, float temperature, float humidity, time_t timestamp);
+    RoomData getRoomData(uint8_t room_id) const;
+    void sensorSetup(uint8_t room_id, const uint8_t* mac_addr, uint32_t sleep_period_ms);
+    bool getMacAddr(uint8_t room_id, uint8_t* out_mac_addr) const; 
+    void setNewSleepPeriod(uint8_t room_id, uint32_t new_sleep_period_ms);
+    uint32_t getNewSleepPeriod(uint8_t room_id) const;
+    bool isPendingUpdate(uint8_t room_id) const;
+    void sleepPeriodWasUpdated(uint8_t room_id);
+    uint8_t getId(uint8_t* mac_addr) const;
 private:
     RoomData rooms[NUM_ROOMS];
     mutable SemaphoreHandle_t dataMutex;
+    bool roomIdIsValid(uint8_t room_id) const;
 };

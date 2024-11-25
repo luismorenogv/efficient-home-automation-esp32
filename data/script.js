@@ -16,6 +16,7 @@ function initializeWebSocket() {
         let data;
         try {
             data = JSON.parse(event.data);
+            console.log("Received message:", data);
         } catch (error) {
             console.error('Error parsing JSON:', error);
             return;
@@ -27,14 +28,17 @@ function initializeWebSocket() {
             } catch (error) {
                 console.error('Error in displayHistoryModal:', error);
             }
-        } else {
+        } else if (data.type === 'update') {
             try {
                 updateSensorData(data);
             } catch (error) {
                 console.error('Error in updateSensorData:', error);
             }
+        } else {
+            console.warn('Unknown message type received:', data);
         }
     };
+
 
     socket.onclose = function() {
         console.log("WebSocket connection closed, retrying in 5 seconds...");
@@ -49,11 +53,18 @@ function initializeWebSocket() {
 
 function showHistoryModal(roomId) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(`getHistory:${roomId}`);
+        const message = {
+            action: "getHistory",
+            room_id: roomId
+        };
+        socket.send(JSON.stringify(message));
+        console.log(`Sent getHistory request: ${JSON.stringify(message)}`);
     } else {
         alert('WebSocket not connected');
     }
 }
+
+
 
 function displayHistoryModal(data) {
     // Remove existing modal if any
@@ -98,8 +109,8 @@ function displayHistoryModal(data) {
     // Calculate min and max values for temperature
     const minTemp = Math.min(...temperatures);
     const maxTemp = Math.max(...temperatures);
-    const tempRange = maxTemp - minTemp || 1; // Avoid division by zero
-    const tempPadding = tempRange * 0.3;
+    const tempRange = (maxTemp || 1) - (minTemp || 1); // Avoid division by zero
+    const tempPadding = 5.0;
 
     const tempMin = minTemp - tempPadding;
     const tempMax = maxTemp + tempPadding;
@@ -108,7 +119,7 @@ function displayHistoryModal(data) {
     const minHumid = Math.min(...humidities);
     const maxHumid = Math.max(...humidities);
     const humidRange = maxHumid - minHumid || 1; // Avoid division by zero
-    const humidPadding = humidRange * 0.3;
+    const humidPadding = 5.0;
 
     const humidMin = minHumid - humidPadding;
     const humidMax = maxHumid + humidPadding;
@@ -210,6 +221,32 @@ function displayHistoryModal(data) {
 }
 
 function updateSensorData(data) {
+    // Defensive checks
+    if (typeof data.room_id === 'undefined') {
+        console.error('updateSensorData called with undefined room_id:', data);
+        return;
+    }
+    if (typeof data.temperature === 'undefined') {
+        console.error(`Temperature data missing for room ${data.room_id}:`, data);
+        return;
+    }
+    if (typeof data.humidity === 'undefined') {
+        console.error(`Humidity data missing for room ${data.room_id}:`, data);
+        return;
+    }
+    if (typeof data.sleep_period_ms === 'undefined') {
+        console.error(`Sleep period data missing for room ${data.room_id}:`, data);
+        return;
+    }
+    if (typeof data.room_name === 'undefined') {
+        console.error(`Room name missing for room ${data.room_id}:`, data);
+        return;
+    }
+    if (typeof data.timestamp === 'undefined') {
+        console.error(`Timestamp missing for room ${data.room_id}:`, data);
+        return;
+    }
+
     const container = document.getElementById('sensor-data');
 
     // Check if the room element already exists
@@ -217,7 +254,7 @@ function updateSensorData(data) {
     if (!roomDiv) {
         // Create new room element
         roomDiv = document.createElement('div');
-        roomDiv.className = 'room';
+        roomDiv.className = 'room-box';
         roomDiv.id = `room-${data.room_id}`;
 
         const title = document.createElement('h2');
@@ -236,14 +273,14 @@ function updateSensorData(data) {
         timePara.id = `time-${data.room_id}`;
         roomDiv.appendChild(timePara);
 
-        // Add polling interval dropdown
-        const pollingLabel = document.createElement('label');
-        pollingLabel.setAttribute('for', `polling-${data.room_id}`);
-        pollingLabel.textContent = `Polling Interval: `;
-        roomDiv.appendChild(pollingLabel);
+        // Add sleep period dropdown
+        const sleepLabel = document.createElement('label');
+        sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
+        sleepLabel.textContent = `Sleep Period: `;
+        roomDiv.appendChild(sleepLabel);
 
-        const pollingSelect = document.createElement('select');
-        pollingSelect.id = `polling-${data.room_id}`;
+        const sleepSelect = document.createElement('select');
+        sleepSelect.id = `sleep-${data.room_id}`;
         const options = [
             { text: '5 min', value: '5min' },
             { text: '15 min', value: '15min' },
@@ -257,38 +294,62 @@ function updateSensorData(data) {
             const optionElement = document.createElement('option');
             optionElement.value = opt.value;
             optionElement.textContent = opt.text;
-            pollingSelect.appendChild(optionElement);
+            sleepSelect.appendChild(optionElement);
         });
 
-        pollingSelect.onchange = () => {
-            const selected = pollingSelect.value;
+        sleepSelect.onchange = () => {
+            const selected = sleepSelect.value;
             const message = {
-                action: "setPollingPeriod",
+                action: "setSleepPeriod",
                 room_id: data.room_id,
-                polling_period: selected
+                sleep_period: selected
             };
             socket.send(JSON.stringify(message));
-            console.log(`Sent polling period update: ${JSON.stringify(message)}`);
+            console.log(`Sent sleep period update: ${JSON.stringify(message)}`);
         };
 
-        roomDiv.appendChild(pollingSelect);
+        roomDiv.appendChild(sleepSelect);
+
+        // Add "Show History" button
+        const historyButton = document.createElement('button');
+        historyButton.textContent = 'Show History';
+        historyButton.onclick = () => {
+            showHistoryModal(data.room_id);
+        };
+        historyButton.style.marginLeft = '10px'; // Add some spacing
+        roomDiv.appendChild(historyButton);
 
         container.appendChild(roomDiv);
     }
 
     // Update the data
-    document.getElementById(`temp-${data.room_id}`).textContent = `Temperature: ${data.temperature.toFixed(2)} °C`;
-    document.getElementById(`humid-${data.room_id}`).textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
-    const date = new Date(data.timestamp * 1000);
-    document.getElementById(`time-${data.room_id}`).textContent = `Last Updated: ${date.toLocaleString()}`;
+    try {
+        document.getElementById(`temp-${data.room_id}`).textContent = `Temperature: ${data.temperature.toFixed(2)} °C`;
+    } catch (e) {
+        console.error(`Error setting temperature for room ${data.room_id}:`, e);
+    }
 
-    // Update polling interval dropdown if necessary
-    if (document.getElementById(`polling-${data.room_id}`)) {
-        document.getElementById(`polling-${data.room_id}`).value = pollingMsToStr(data.wake_interval_ms);
+    try {
+        document.getElementById(`humid-${data.room_id}`).textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
+    } catch (e) {
+        console.error(`Error setting humidity for room ${data.room_id}:`, e);
+    }
+
+    try {
+        const date = new Date(data.timestamp * 1000);
+        document.getElementById(`time-${data.room_id}`).textContent = `Last Updated: ${date.toLocaleString()}`;
+    } catch (e) {
+        console.error(`Error setting timestamp for room ${data.room_id}:`, e);
+    }
+
+    // Update sleep period dropdown
+    if (document.getElementById(`sleep-${data.room_id}`)) {
+        document.getElementById(`sleep-${data.room_id}`).value = sleepMsToStr(data.sleep_period_ms);
     }
 }
 
-function pollingMsToStr(ms) {
+
+function sleepMsToStr(ms) {
     switch(ms) {
         case 300000:
             return '5min';

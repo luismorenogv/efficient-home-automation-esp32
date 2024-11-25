@@ -3,7 +3,7 @@
  * @brief Implementation of NTPClient class for NTP time synchronization
  *
  * @author Luis Moreno
- * @date Nov 21, 2024
+ * @date Nov 25, 2024
  */
 
 #include "MasterDevice/NTPClient.h"
@@ -22,7 +22,7 @@ void NTPClient::initialize() {
     const int retry_count = 10;
     while (!getLocalTime(&timeinfo) && retry < retry_count) {
         Serial.println("Waiting for NTP time synchronization");
-        delay(2000); // Wait for 2 seconds before retrying
+        delay(2000);
         retry++;
     }
 
