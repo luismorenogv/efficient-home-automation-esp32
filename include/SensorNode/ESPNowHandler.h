@@ -3,21 +3,22 @@
  * @brief Declaration of ESPNowHandler class for ESP-NOW communication with MasterDevice
  *
  * @author Luis Moreno
- * @date Nov 22, 2024
+ * @date Nov 25, 2024
  */
 
 #pragma once
 
 #include <esp_now.h>
 #include <WiFi.h>
-#include "SensorConfig.h"
+#include "config.h"
 #include "PowerManager.h"
 #include "common.h"
+#include <freertos/semphr.h>
 
 class ESPNowHandler {
 public:
     ESPNowHandler(PowerManager& powerManager);
-    bool initializeESPNOW(const uint8_t* master_mac_address);
+    bool initializeESPNOW(const uint8_t* master_mac_address, const uint8_t channel);
     void sendMsg(const uint8_t* data, size_t size);
     bool waitForAck(MessageType expected_ack, unsigned long timeout_ms);
 
@@ -32,4 +33,6 @@ private:
     esp_now_peer_info_t master_peer;
     volatile bool ack_received;
     MessageType last_acked_msg;
+
+    SemaphoreHandle_t ackSemaphore;
 };
