@@ -17,7 +17,7 @@
 
 class Communications {
 public:
-    Communications(DataManager& dataManager);
+    Communications();
     void initializeWifi();
     bool initializeESPNOW();
     void sendAck(const uint8_t* mac_addr, MessageType acked_msg);
@@ -29,6 +29,5 @@ private:
     void onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len);
 
     static Communications* instance;
-    DataManager& dataManager;
     QueueHandle_t dataQueue;
 };
