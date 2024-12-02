@@ -12,7 +12,7 @@
 static MasterController* masterControllerInstance = nullptr;
 
 MasterController::MasterController() 
-    : communications(dataManager), 
+    : communications(), 
       webSockets(dataManager) 
 {
     masterControllerInstance = this;

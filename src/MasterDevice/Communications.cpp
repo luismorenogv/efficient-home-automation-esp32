@@ -11,7 +11,7 @@
 
 Communications* Communications::instance = nullptr;
 
-Communications::Communications(DataManager& dataManager) : dataManager(dataManager) {
+Communications::Communications() {
     instance = this;
 }
 
