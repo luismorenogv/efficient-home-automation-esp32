@@ -123,28 +123,7 @@ void MasterController::espnowTask(void* pvParameter) {
                         self->dataManager.sensorSetup(room_id, msg.mac_addr, sleep_period_ms);
 
                         Serial.printf("Received JOIN_NETWORK from room %u with sleep_period %u ms\r\n", room_id, sleep_period_ms);
-    
-                        // Add peer info
-                        esp_now_peer_info_t peerInfo;
-                        memset(&peerInfo, 0, sizeof(peerInfo));
-                        memcpy(peerInfo.peer_addr, msg.mac_addr, MAC_ADDRESS_LENGTH);
-                        peerInfo.channel = WiFi.channel();
-                        peerInfo.encrypt = false;
-
-                        if (esp_now_add_peer(&peerInfo) == ESP_OK) {
-                            Serial.printf("SensorNode %u added as peer successfully: %02X:%02X:%02X:%02X:%02X:%02X\r\n", 
-                                        room_id,
-                                        msg.mac_addr[0], msg.mac_addr[1], 
-                                        msg.mac_addr[2], msg.mac_addr[3], 
-                                        msg.mac_addr[4], msg.mac_addr[5]);
-                        } else {
-                            Serial.printf("Failed to add SensorNode %u as peer: %02X:%02X:%02X:%02X:%02X:%02X\r\n", 
-                                        room_id,
-                                        msg.mac_addr[0], msg.mac_addr[1], 
-                                        msg.mac_addr[2], msg.mac_addr[3], 
-                                        msg.mac_addr[4], msg.mac_addr[5]);
-                        }
-
+                        self->communications.registerPeer(msg.mac_addr);
                         self->communications.sendAck(msg.mac_addr, msg_type);
                     }
                     break;

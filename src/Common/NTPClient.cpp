@@ -6,7 +6,7 @@
  * @date Nov 25, 2024
  */
 
-#include "MasterDevice/NTPClient.h"
+#include "Common/NTPClient.h"
 #include <time.h>
 #include <Arduino.h>
 

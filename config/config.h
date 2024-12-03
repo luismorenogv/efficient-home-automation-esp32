@@ -7,7 +7,7 @@
  */
 #pragma once
 #include <Arduino.h>
-#include "mac_addrs.h"
+#include "Common/mac_addrs.h"
 
 /**************************************************************
  *                         Common                             *
@@ -32,7 +32,7 @@ constexpr const char* ROOM_NAME[NUM_ROOMS] = {"Room Luis", "Room Pablo", "Room A
  *************************************************************/
 
 // Define Room ID (unique for each SensorNode)
-constexpr uint8_t ROOM_ID = 0;
+constexpr uint8_t ROOM_ID = 1;
 
 constexpr const uint8_t* master_mac_addr = esp32s3_mac;
 // Communication

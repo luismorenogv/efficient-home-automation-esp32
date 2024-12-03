@@ -12,7 +12,7 @@
 #include <WiFi.h>
 #include "config.h"
 #include "PowerManager.h"
-#include "common.h"
+#include "Common/common.h"
 #include <freertos/semphr.h>
 
 class ESPNowHandler {

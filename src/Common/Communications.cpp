@@ -6,12 +6,12 @@
  * @date Nov 25, 2024
  */
 
-#include "MasterDevice/Communications.h"
-#include "secrets.h" // For Wi-Fi credentials
+#include "Common/Communications.h"
+#include "Common/secrets.h" // For Wi-Fi credentials
 
 Communications* Communications::instance = nullptr;
 
-Communications::Communications() {
+Communications::Communications(){
     instance = this;
 }
 
@@ -61,12 +61,21 @@ bool Communications::initializeESPNOW() {
     return true;
 }
 
+bool Communications::registerPeer(uint8_t* mac_address){
+    esp_now_peer_info_t peer_info;
+    memset(&peer_info, 0, sizeof(peer_info));
+    memcpy(peer_info.peer_addr, mac_address, MAC_ADDRESS_LENGTH);
+    peer_info.channel = WiFi.channel();
+    peer_info.encrypt = false;
+
+    if (esp_now_add_peer(&peer_info) != ESP_OK){
+        Serial.println("Failed to add peer");
+        return false;
+    }
+    return true;
+}
+
 void Communications::onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len) {
-    /*
-    Serial.printf("onDataRecvStatic invoked. MAC: %02X:%02X:%02X:%02X:%02X:%02X, len: %d\r\n",
-                  mac_addr[0], mac_addr[1], mac_addr[2],
-                  mac_addr[3], mac_addr[4], mac_addr[5], len);
-    */
     if (instance) {
         instance->onDataRecv(mac_addr, data, len);
     }
@@ -94,13 +103,7 @@ void Communications::sendAck(const uint8_t* mac_addr, MessageType acked_msg) {
     AckMsg ack;
     ack.acked_msg = acked_msg;
 
-    esp_err_t result = esp_now_send(mac_addr, reinterpret_cast<uint8_t*>(&ack), sizeof(AckMsg));
-    if (result == ESP_OK) {
-        Serial.printf("ACK sent to sensor %02X:%02X:%02X:%02X:%02X:%02X successfully\r\n",
-                      mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    } else {
-        Serial.printf("Error sending ACK: %d\r\n", result);
-    }
+    sendMsg(mac_addr, reinterpret_cast<uint8_t*>(&ack), sizeof(ack));
 }
 
 void Communications::sendMsg(const uint8_t* mac_addr, const uint8_t* data, size_t size) {

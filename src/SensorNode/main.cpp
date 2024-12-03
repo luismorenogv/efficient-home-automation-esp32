@@ -12,7 +12,7 @@
 
 RTC_DATA_ATTR bool first_cycle = true;
 
-RTC_DATA_ATTR uint8_t wifi_channel = 6;
+RTC_DATA_ATTR uint8_t wifi_channel = 1;
 RTC_DATA_ATTR uint32_t sleep_period_ms = DEFAULT_SLEEP_DURATION;
 
 SensorNode sensorNode(ROOM_ID, &sleep_period_ms);
@@ -31,10 +31,8 @@ void setup() {
     }
     sensorNode.run();
     sensorNode.goSleep();
-    
 }
 
 void loop() {
     // Not used as the device sleeps after setup
 }
-

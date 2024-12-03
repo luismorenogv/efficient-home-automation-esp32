@@ -13,13 +13,14 @@
 #include "common.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-#include "DataManager.h"
+#include <freertos/semphr.h>
 
 class Communications {
 public:
     Communications();
     void initializeWifi();
     bool initializeESPNOW();
+    bool registerPeer(uint8_t* master_mac_address);
     void sendAck(const uint8_t* mac_addr, MessageType acked_msg);
     void sendMsg(const uint8_t* mac_addr, const uint8_t* data, size_t size);
     void setQueue(QueueHandle_t queue);
