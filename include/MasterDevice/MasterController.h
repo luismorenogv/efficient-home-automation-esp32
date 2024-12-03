@@ -9,9 +9,9 @@
 #pragma once
 
 #include "config.h"
-#include "mac_addrs.h"
-#include "Communications.h"
-#include "NTPClient.h"
+#include "Common/mac_addrs.h"
+#include "Common/Communications.h"
+#include "Common/NTPClient.h"
 #include "DataManager.h"
 #include "WebServer.h"
 #include "WebSockets.h"

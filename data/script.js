@@ -110,7 +110,7 @@ function displayHistoryModal(data) {
     const minTemp = Math.min(...temperatures);
     const maxTemp = Math.max(...temperatures);
     const tempRange = (maxTemp || 1) - (minTemp || 1); // Avoid division by zero
-    const tempPadding = 5.0;
+    const tempPadding = maxTemp * 0.4;
 
     const tempMin = minTemp - tempPadding;
     const tempMax = maxTemp + tempPadding;
@@ -119,7 +119,7 @@ function displayHistoryModal(data) {
     const minHumid = Math.min(...humidities);
     const maxHumid = Math.max(...humidities);
     const humidRange = maxHumid - minHumid || 1; // Avoid division by zero
-    const humidPadding = 5.0;
+    const humidPadding = maxHumid * 0.4;
 
     const humidMin = minHumid - humidPadding;
     const humidMax = maxHumid + humidPadding;

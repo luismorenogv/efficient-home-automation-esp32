@@ -8,9 +8,13 @@
 
 #pragma once
 
-#include "SensorNode/DHTSensor.h"
-#include "SensorNode/ESPNowHandler.h"
-#include "SensorNode/PowerManager.h"
+#include "SHT31Sensor.h"
+#include "ESPNowHandler.h"
+#include "PowerManager.h"
+
+constexpr uint8_t SHT31_ADDRESS = 0x44;
+constexpr uint8_t SDA_PIN = 21;
+constexpr uint8_t SCL_PIN = 22;
 
 class SensorNode {
 public:
@@ -22,7 +26,7 @@ public:
 
 private:
     uint8_t room_id;
-    DHTSensor dhtSensor;
+    SHT31Sensor sht31Sensor;
     ESPNowHandler espNowHandler;
     PowerManager powerManager;
 
