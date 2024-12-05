@@ -43,3 +43,7 @@ constexpr uint8_t MAX_INIT_RETRIES = 3;
 // DHT Sensor configuration
 constexpr uint8_t DHT_PIN = 4; // GPIO pin connected to DHT22
 
+/**************************************************************
+ *                      Room node                             *
+ *************************************************************/
+constexpr uint8_t LD2410_PIN = 14;
