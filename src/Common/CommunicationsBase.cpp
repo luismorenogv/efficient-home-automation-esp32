@@ -193,6 +193,21 @@ void CommunicationsBase::setQueue(QueueHandle_t queue) {
 
 void CommunicationsBase::onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len) {
     if (instance) {
+        Serial.println("Message received");
         instance->onDataRecv(mac_addr, data, len);
+    }
+}
+
+void CommunicationsBase::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len){
+    // Enqueue the message for processing in the FreeRTOS task
+    IncomingMsg incoming_msg;
+    memcpy(incoming_msg.mac_addr, mac_addr, MAC_ADDRESS_LENGTH);
+    memcpy(incoming_msg.data, data, len);
+    incoming_msg.len = len;
+
+    if (dataQueue) {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(dataQueue, &incoming_msg, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
