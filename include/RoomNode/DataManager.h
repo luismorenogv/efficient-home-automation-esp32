@@ -11,6 +11,8 @@
 #include <Arduino.h>
 #include <freertos/semphr.h>
 
+
+
 class DataManager {
 public:
     DataManager();
@@ -18,4 +20,8 @@ public:
     DataManager(const DataManager&) = delete;
     DataManager& operator=(const DataManager&) = delete;
 private:
+    bool presence;
+    mutable SemaphoreHandle_t presenceMutex;
+    void setPresence(bool new_presence);
+
 };

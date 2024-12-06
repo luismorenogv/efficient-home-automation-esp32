@@ -25,10 +25,11 @@ const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_NETWORK", "ACK", "TEMP_HUMID_D
 
 // Message Types
 enum class MessageType : uint8_t {
-    JOIN_NETWORK       = 0x00,     // SensorNode to MasterDevice: Request to join network
+    JOIN_NETWORK       = 0x00,     // SensorNode/RoomNode to MasterDevice: Request to join network
     ACK                = 0x01,     // Acknowledge message reception 
     TEMP_HUMID         = 0x02,     // SensorNode to MasterDevice: Sends sensor data
-    NEW_SLEEP_PERIOD   = 0x03      // MasterDevice to SensorNode: Sends new sleep period
+    NEW_SLEEP_PERIOD   = 0x03,     // MasterDevice to SensorNode: Sends new sleep period
+    FIND_CHANNEL       = 0x04      // SensorNode/RoomNode to MasterDevice to find WiFi channel of operation
 };
 
 // ACK Message Structure
