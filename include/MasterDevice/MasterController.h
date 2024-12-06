@@ -10,7 +10,7 @@
 
 #include "config.h"
 #include "Common/mac_addrs.h"
-#include "Common/Communications.h"
+#include "MasterCommunications.h"
 #include "Common/NTPClient.h"
 #include "DataManager.h"
 #include "WebServer.h"
@@ -26,7 +26,7 @@ public:
     void initialize();
 
 private:
-    Communications communications;
+    MasterCommunications communications;
     NTPClient ntpClient;
     DataManager dataManager;
     WebServer webServer;

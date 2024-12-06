@@ -123,7 +123,7 @@ void MasterController::espnowTask(void* pvParameter) {
                         self->dataManager.sensorSetup(room_id, msg.mac_addr, sleep_period_ms);
 
                         Serial.printf("Received JOIN_NETWORK from room %u with sleep_period %u ms\r\n", room_id, sleep_period_ms);
-                        self->communications.registerPeer(msg.mac_addr);
+                        self->communications.registerPeer(msg.mac_addr, WiFi.channel());
                         self->communications.sendAck(msg.mac_addr, msg_type);
                     }
                     break;

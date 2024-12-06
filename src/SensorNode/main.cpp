@@ -11,24 +11,27 @@
 #include "config.h"
 
 RTC_DATA_ATTR bool first_cycle = true;
-
-RTC_DATA_ATTR uint8_t wifi_channel = 1;
 RTC_DATA_ATTR uint32_t sleep_period_ms = DEFAULT_SLEEP_DURATION;
+RTC_DATA_ATTR uint8_t channel_wifi = 0;
 
-SensorNode sensorNode(ROOM_ID, &sleep_period_ms);
+SensorNode sensorNode(ROOM_ID, &sleep_period_ms, &channel_wifi, &first_cycle);
 
 void setup() {
-    if (!sensorNode.initialize(wifi_channel)) {
+    Serial.begin(115200);
+
+    if (!sensorNode.initialize()) {
         Serial.println("Initialization failed. Entering deep sleep.");
         sensorNode.goSleep();
     }
-    if (first_cycle){
-        if (sensorNode.joinNetwork()){
+
+    if (first_cycle) {
+        if (sensorNode.joinNetwork()) {
             first_cycle = false;
-        } else{
+        } else {
             sensorNode.goSleep();
         }
     }
+
     sensorNode.run();
     sensorNode.goSleep();
 }
