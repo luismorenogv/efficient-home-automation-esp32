@@ -1,11 +1,15 @@
 /**
  * @file SensorNode.h
- * @brief Declaration of SensorNode class for handling sensor readings and ESP-NOW communication
- *
+ * @brief Manages sensor readings and communication for the SensorNode device.
+ * 
+ * On the first cycle, attempts to join the network and synchronize with MasterDevice.
+ * On subsequent cycles, sends temperature/humidity data, and then sleeps.
+ * 
+ * Uses SHT31 for more accurate readings compared to DHT22.
+ * 
  * @author Luis Moreno
  * @date Nov 25, 2024
  */
-
 #pragma once
 
 #include "SHT31Sensor.h"

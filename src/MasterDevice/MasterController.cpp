@@ -93,7 +93,7 @@ void MasterController::espnowTask(void* pvParameter) {
                         self->webSockets.sendDataUpdate(room_id);
 
                         // Check if pending_update is true
-                        if (self->dataManager.isPendingUpdate(room_id)) {
+                        if (self->dataManager.isPendingUpdate(room_id, NodeType::SENSOR)) {
                             uint32_t new_period = self->dataManager.getNewSleepPeriod(room_id);
 
                             NewSleepPeriodMsg new_period_msg;
@@ -101,7 +101,7 @@ void MasterController::espnowTask(void* pvParameter) {
                             new_period_msg.new_period_ms = new_period;
 
                             uint8_t sensor_mac[MAC_ADDRESS_LENGTH];
-                            if (self->dataManager.getMacAddr(room_id, sensor_mac)) {
+                            if (self->dataManager.getMacAddr(room_id, NodeType::SENSOR, sensor_mac)) {
                                 self->communications.sendMsg(sensor_mac, reinterpret_cast<uint8_t*>(&new_period_msg), sizeof(NewSleepPeriodMsg));
                                 Serial.printf("Sent NEW_SLEEP_PERIOD to sensor in room %u successfully\r\n", room_id);
                             } else {
@@ -115,9 +115,9 @@ void MasterController::espnowTask(void* pvParameter) {
                         }
                     }
                     break;
-                case MessageType::JOIN_NETWORK:
+                case MessageType::JOIN_SENSOR:
                     {
-                        JoinNetworkMsg* payload = reinterpret_cast<JoinNetworkMsg*>(msg.data);
+                        JoinSensorMsg* payload = reinterpret_cast<JoinSensorMsg*>(msg.data);
                         uint8_t room_id = payload->room_id;
                         uint32_t sleep_period_ms = payload->sleep_period_ms;
                         self->dataManager.sensorSetup(room_id, msg.mac_addr, sleep_period_ms);
@@ -144,6 +144,20 @@ void MasterController::espnowTask(void* pvParameter) {
                         } else {
                             Serial.printf("Received ACK for unknown MessageType: %d\r\n", payload->acked_msg);
                         }
+                    }
+                    break;
+                case MessageType::JOIN_ROOM:
+                    {
+                        JoinRoomMsg* payload = reinterpret_cast<JoinRoomMsg*>(msg.data);
+                        uint8_t room_id = payload->room_id;
+                        self->dataManager.controlSetup(room_id, msg.mac_addr, 
+                                                       payload->warm_hour, payload->warm_min, 
+                                                       payload->cold_hour, payload->cold_min);
+                        self->communications.registerPeer(msg.mac_addr, WiFi.channel());
+                        self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
+                        Serial.printf("Received JOIN_ROOM from room %u with warm/cold times\r\n", room_id);
+
+                        self->webSockets.sendDataUpdate(room_id);
                     }
                     break;
                 default:

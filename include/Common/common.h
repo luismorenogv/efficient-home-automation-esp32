@@ -1,7 +1,9 @@
 /**
  * @file common.h
  * @brief Shared constants, enums, and structures for Master and Sensor Nodes
- *
+ * 
+ * Note: JoinRoomMsg now contains hour and minute fields for warm/cold switches.
+ * 
  * @author Luis Moreno
  * @date Nov 24, 2024
  */
@@ -9,36 +11,32 @@
 #pragma once
 
 #include <Arduino.h>
-#include <time.h>
 
-// Constants
 constexpr uint8_t MAC_ADDRESS_LENGTH = 6;
-
 constexpr uint8_t MAX_WIFI_CHANNEL = 13;
-
-constexpr uint8_t TOTAL_FRAMES = 4;
-
+constexpr uint8_t TOTAL_FRAMES = 5;
 constexpr uint8_t ID_NOT_VALID = 255;
 
-// Message names for debugging
-const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_NETWORK", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD"};
+const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD"};
 
-// Message Types
 enum class MessageType : uint8_t {
-    JOIN_NETWORK       = 0x00,     // SensorNode/RoomNode to MasterDevice: Request to join network
-    ACK                = 0x01,     // Acknowledge message reception 
-    TEMP_HUMID         = 0x02,     // SensorNode to MasterDevice: Sends sensor data
-    NEW_SLEEP_PERIOD   = 0x03,     // MasterDevice to SensorNode: Sends new sleep period
-    FIND_CHANNEL       = 0x04      // SensorNode/RoomNode to MasterDevice to find WiFi channel of operation
+    JOIN_SENSOR      = 0x00,
+    JOIN_ROOM        = 0x01,
+    ACK              = 0x02, 
+    TEMP_HUMID       = 0x03,
+    NEW_SLEEP_PERIOD = 0x04,
 };
 
-// ACK Message Structure
+enum class NodeType : uint8_t {
+    SENSOR = 0x00,
+    ROOM   = 0x01,
+};
+
 struct AckMsg {
     MessageType type = MessageType::ACK;   
-    MessageType acked_msg; // Acknowledged message type
+    MessageType acked_msg; 
 } __attribute__((packed));
 
-// Temperature and Humidity Data Structure
 struct TempHumidMsg {
     MessageType type = MessageType::TEMP_HUMID;   
     uint8_t room_id;
@@ -51,26 +49,34 @@ struct NewSleepPeriodMsg {
     uint32_t new_period_ms;
 } __attribute__((packed));
 
-struct JoinNetworkMsg {
-    MessageType type = MessageType::JOIN_NETWORK;
+struct JoinSensorMsg {
+    MessageType type = MessageType::JOIN_SENSOR;
     uint8_t room_id;
     uint32_t sleep_period_ms;
 } __attribute__((packed));
 
-// Define a union of all message types
+struct JoinRoomMsg {
+    MessageType type = MessageType::JOIN_ROOM;
+    uint8_t room_id;
+    uint8_t warm_hour;
+    uint8_t warm_min;
+    uint8_t cold_hour;
+    uint8_t cold_min;
+} __attribute__((packed));
+
 union AllMessages {
     AckMsg ack;
     TempHumidMsg tempHumid;
     NewSleepPeriodMsg newSleep;
-    JoinNetworkMsg join;
+    JoinSensorMsg join_sensor;
+    JoinRoomMsg join_room;
 };
 
-// Set MAX_MSG_SIZE to the size of the union
 #define MAX_MSG_SIZE sizeof(union AllMessages)
 
-// Incoming Message Structure for processing in FreeRTOS task
 struct IncomingMsg {
     uint8_t mac_addr[MAC_ADDRESS_LENGTH];
     uint8_t data[MAX_MSG_SIZE];
     uint32_t len;
 } __attribute__((packed));
+

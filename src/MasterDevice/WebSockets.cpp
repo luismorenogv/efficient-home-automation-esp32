@@ -33,7 +33,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
             // Send current sensor data for all registered rooms upon client connection
             for (uint8_t i = 0; i < NUM_ROOMS; i++) {
                 const RoomData& room_data = dataManager.getRoomData(i);
-                if (room_data.registered) {
+                if (room_data.isRegistered()) {
                     sendDataUpdate(i);
                 }
             }
@@ -184,22 +184,47 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
     if (room_id >= NUM_ROOMS) return;
 
     RoomData room = dataManager.getRoomData(room_id);
-    uint16_t idx = room.index == 0 ? MAX_DATA_POINTS - 1 : room.index - 1;
 
-    DynamicJsonDocument doc(256);
+    // If there's no data at all, skip
+    if (!room.isRegistered()) return;
+
+    // For sensor node data
+    uint16_t idx = room.sensor.index == 0 ? MAX_DATA_POINTS - 1 : room.sensor.index - 1;
+    float last_temp = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.temperature[idx] : 0;
+    float last_humid = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.humidity[idx] : 0;
+    time_t last_ts = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.timestamps[idx] : 0;
+    uint32_t sleep_ms = room.sensor.registered ? room.sensor.sleep_period_ms : DEFAULT_SLEEP_DURATION;
+
+    DynamicJsonDocument doc(512);
     JsonObject obj = doc.to<JsonObject>();
     obj["type"] = "update";
     obj["room_id"] = room_id;
     obj["room_name"] = ROOM_NAME[room_id];
-    obj["temperature"] = room.temperature[idx];
-    obj["humidity"] = room.humidity[idx];
-    obj["timestamp"] = room.timestamps[idx];
-    obj["sleep_period_ms"] = room.sleep_period_ms;
+
+    // Include sensor data only if registered
+    if (room.sensor.registered) {
+        obj["temperature"] = last_temp;
+        obj["humidity"] = last_humid;
+        obj["timestamp"] = last_ts;
+        obj["sleep_period_ms"] = sleep_ms;
+    }
+
+    // Include control data only if RoomNode is registered
+    if (room.control.registered) {
+        // Format times as HH:MM strings
+        char warm_str[6];
+        snprintf(warm_str, sizeof(warm_str), "%02u:%02u", room.control.warm_hour, room.control.warm_min);
+        char cold_str[6];
+        snprintf(cold_str, sizeof(cold_str), "%02u:%02u", room.control.cold_hour, room.control.cold_min);
+
+        obj["warm_time"] = warm_str;
+        obj["cold_time"] = cold_str;
+    }
 
     String jsonString;
     serializeJson(doc, jsonString);
-
     ws.textAll(jsonString);
+
     Serial.printf("Sent data update via WebSocket for room %u\r\n", room_id);
 }
 
@@ -208,7 +233,7 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     if (room_id >= NUM_ROOMS) return;
 
     RoomData room = dataManager.getRoomData(room_id);
-    uint16_t count = room.valid_data_points;
+    uint16_t count = room.sensor.valid_data_points;
 
     DynamicJsonDocument doc(1024);
     JsonObject obj = doc.to<JsonObject>();
@@ -223,15 +248,15 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
         JsonArray humidArray = obj.createNestedArray("humidity");
         JsonArray timeArray = obj.createNestedArray("timestamps");
 
-        uint16_t idx = room.index;
+        uint16_t idx = room.sensor.index;
         uint16_t startIdx = (idx + MAX_DATA_POINTS - count) % MAX_DATA_POINTS;
 
         for (uint16_t i = 0; i < count; ++i) {
             uint16_t index = (startIdx + i) % MAX_DATA_POINTS;
 
-            float temp = room.temperature[index];
-            float humid = room.humidity[index];
-            time_t ts = room.timestamps[index];
+            float temp = room.sensor.temperature[index];
+            float humid = room.sensor.humidity[index];
+            time_t ts = room.sensor.timestamps[index];
 
             if (ts == 0) continue;
 

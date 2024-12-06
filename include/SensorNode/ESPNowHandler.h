@@ -1,11 +1,12 @@
 /**
  * @file ESPNowHandler.h
- * @brief Declaration of ESPNowHandler class for ESP-NOW communication with MasterDevice
- *
+ * @brief Declaration of ESPNowHandler class for ESP-NOW communication from SensorNode to MasterDevice
+ * 
+ * Uses semaphores for waiting on ACK messages, ensuring synchronization between send operations and received acknowledgments.
+ * 
  * @author Luis Moreno
  * @date Dec 5, 2024
  */
-
 #pragma once
 
 #include "Common/CommunicationsBase.h"
@@ -27,8 +28,8 @@ private:
     volatile bool ack_received;
     MessageType last_acked_msg;
 
-    SemaphoreHandle_t ackSemaphore;
+    SemaphoreHandle_t ackSemaphore; // Signals when an ACK message has been received
 
-    // Static instance pointer
     static ESPNowHandler* instance;
 };
+
