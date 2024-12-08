@@ -1,13 +1,14 @@
 /**
  * @file DataManager.cpp
  * @brief Implementation of DataManager class for managing sensor data storage and retrieval
- *
+ * 
  * @author Luis Moreno
  * @date Nov 25, 2024
  */
 
 #include "MasterDevice/DataManager.h"
 
+// Constructor initializes mutexes for thread-safe operations
 DataManager::DataManager() {
     sensorMutex = xSemaphoreCreateMutex();
     controlMutex = xSemaphoreCreateMutex();
@@ -25,7 +26,7 @@ void DataManager::addSensorData(uint8_t room_id, float temperature, float humidi
             if (room.sensor.valid_data_points > MAX_DATA_POINTS) {
                 room.sensor.valid_data_points = MAX_DATA_POINTS;
             }
-            // Update index
+            // Update index for circular buffer
             room.sensor.index = (idx + 1) % MAX_DATA_POINTS;
         xSemaphoreGive(sensorMutex);
     }
@@ -87,7 +88,8 @@ bool DataManager::getMacAddr(uint8_t room_id, NodeType node_type, uint8_t* out_m
         if (node_type == NodeType::SENSOR){
             xSemaphoreTake(sensorMutex, portMAX_DELAY);
                 if (!rooms[room_id].sensor.registered){
-                    Serial.println("RoomNode MAC address is not registered.");
+                    Serial.println("Sensor MAC address is not registered.");
+                    xSemaphoreGive(sensorMutex);
                     return false;
                 }
                 memcpy(out_mac_addr, rooms[room_id].sensor.mac_addr, MAC_ADDRESS_LENGTH);
@@ -95,7 +97,8 @@ bool DataManager::getMacAddr(uint8_t room_id, NodeType node_type, uint8_t* out_m
         } else {
             xSemaphoreTake(controlMutex, portMAX_DELAY);
                 if (!rooms[room_id].control.registered){
-                    Serial.println("RoomNode MAC address is not registered.");
+                    Serial.println("Control MAC address is not registered.");
+                    xSemaphoreGive(controlMutex);
                     return false;
                 }
                 memcpy(out_mac_addr, rooms[room_id].control.mac_addr, MAC_ADDRESS_LENGTH);
@@ -114,8 +117,29 @@ void DataManager::sensorSetup(uint8_t room_id, const uint8_t* mac_addr, uint32_t
             rooms[room_id].sensor.sleep_period_ms = sleep_period_ms;
             rooms[room_id].sensor.new_sleep_period_ms = sleep_period_ms;
             rooms[room_id].sensor.pending_update = false; // No pending update initially
-            rooms[room_id].sensor.registered = true; //Register room
+            rooms[room_id].sensor.registered = true; // Register sensor
         xSemaphoreGive(sensorMutex);
+    }
+}
+
+void DataManager::setNewSchedule(uint8_t room_id, uint8_t warm_hour, uint8_t warm_min, uint8_t cold_hour, uint8_t cold_min) {
+    if (roomIdIsValid(room_id)) {
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
+            rooms[room_id].control.pending_update = true;
+            rooms[room_id].control.cold.hour = cold_hour;
+            rooms[room_id].control.cold.min = cold_min;
+            rooms[room_id].control.warm.hour = warm_hour;
+            rooms[room_id].control.warm.min = warm_min;
+        xSemaphoreGive(controlMutex);
+    }
+}
+
+void DataManager::scheduleWasUpdated(uint8_t room_id) {
+    if (roomIdIsValid(room_id)) {
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
+            rooms[room_id].control.pending_update = false;
+        xSemaphoreGive(controlMutex);
+        Serial.println("Schedule was successfully updated");
     }
 }
 
@@ -160,7 +184,7 @@ uint8_t DataManager::getId(uint8_t* mac_addr) const {
         }
     xSemaphoreGive(sensorMutex);
     xSemaphoreGive(controlMutex);
-    Serial.println("Mac address is not registered.");
+    Serial.println("MAC address is not registered.");
     return ID_NOT_VALID;
 }
 
@@ -176,6 +200,6 @@ void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, uint8_t
             rooms[room_id].control.pending_update = false; // No pending update initially
         xSemaphoreGive(controlMutex);
 
-        Serial.printf("RoomNode setup for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", room_id, warm_hour, warm_min, cold_hour, cold_min);
+        Serial.printf("Control setup for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", room_id, warm_hour, warm_min, cold_hour, cold_min);
     }
 }

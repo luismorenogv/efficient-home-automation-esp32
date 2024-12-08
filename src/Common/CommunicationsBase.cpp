@@ -2,8 +2,10 @@
  * @file CommunicationsBase.cpp
  * @brief Implementation of CommunicationsBase class for ESP-NOW and WiFi communication
  * 
+ * Handles initialization, peer management, message sending, and receiving.
+ * 
  * @author Luis Moreno
- * @date Dec 5, 2024
+ * @date Dec 8, 2024
  */
 
 #include "Common/CommunicationsBase.h"
@@ -33,6 +35,7 @@ CommunicationsBase::~CommunicationsBase() {
     instance = nullptr;
 }
 
+// Initializes Wi-Fi in station mode and connects to the network
 void CommunicationsBase::initializeWifi() {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
@@ -56,6 +59,7 @@ void CommunicationsBase::initializeWifi() {
     Serial.println(wifi_channel);
 }
 
+// Initializes ESP-NOW and registers the receive callback
 bool CommunicationsBase::initializeESPNOW() {
     const int MAX_INIT_RETRIES = 5;
     bool success = false;
@@ -80,6 +84,7 @@ bool CommunicationsBase::initializeESPNOW() {
     return true;
 }
 
+// Registers a new peer device
 bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel) {
     // Lock the mutex to protect peer list
     if (xSemaphoreTake(peerMutex, portMAX_DELAY) != pdTRUE) {
@@ -128,6 +133,7 @@ bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel
     return true;
 }
 
+// Unregisters an existing peer device
 bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
     // Lock the mutex to protect the peer list
     if (xSemaphoreTake(peerMutex, portMAX_DELAY) != pdTRUE) {
@@ -166,7 +172,7 @@ bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
     return false;
 }
 
-
+// Sends a message to a specified peer
 bool CommunicationsBase::sendMsg(uint8_t* mac_addr, const uint8_t* data, size_t size) {
     esp_err_t result = esp_now_send(mac_addr, data, size);
     if (result == ESP_OK) {
@@ -180,6 +186,7 @@ bool CommunicationsBase::sendMsg(uint8_t* mac_addr, const uint8_t* data, size_t 
     }
 }
 
+// Sends an acknowledgment message to a specified peer
 void CommunicationsBase::sendAck(const uint8_t* mac_addr, MessageType acked_msg) {
     AckMsg ack;
     ack.type = MessageType::ACK;
@@ -187,16 +194,19 @@ void CommunicationsBase::sendAck(const uint8_t* mac_addr, MessageType acked_msg)
     sendMsg((uint8_t*)mac_addr, reinterpret_cast<uint8_t*>(&ack), sizeof(ack));
 }
 
+// Sets the message queue for incoming messages
 void CommunicationsBase::setQueue(QueueHandle_t queue) {
     dataQueue = queue;
 }
 
+// Static callback to handle incoming ESP-NOW data
 void CommunicationsBase::onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len) {
     if (instance) {
         instance->onDataRecv(mac_addr, data, len);
     }
 }
 
+// Handles received ESP-NOW data by enqueuing the message
 void CommunicationsBase::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len){
     // Enqueue the message for processing in the FreeRTOS task
     IncomingMsg incoming_msg;
