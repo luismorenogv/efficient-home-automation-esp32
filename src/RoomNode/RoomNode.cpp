@@ -21,6 +21,8 @@ void RoomNode::initialize(){
     Serial.begin(115200);
     delay(1000);
 
+    presenceSensor.initialize();
+
     communications.initializeWifi();
     if (!communications.initializeESPNOW()){
         Serial.println("ESP-NOW initialization failed.");

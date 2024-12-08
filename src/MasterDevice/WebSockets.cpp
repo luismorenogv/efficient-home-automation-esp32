@@ -213,9 +213,9 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
     if (room.control.registered) {
         // Format times as HH:MM strings
         char warm_str[6];
-        snprintf(warm_str, sizeof(warm_str), "%02u:%02u", room.control.warm_hour, room.control.warm_min);
+        snprintf(warm_str, sizeof(warm_str), "%02u:%02u", room.control.warm.hour, room.control.warm.min);
         char cold_str[6];
-        snprintf(cold_str, sizeof(cold_str), "%02u:%02u", room.control.cold_hour, room.control.cold_min);
+        snprintf(cold_str, sizeof(cold_str), "%02u:%02u", room.control.cold.hour, room.control.cold.min);
 
         obj["warm_time"] = warm_str;
         obj["cold_time"] = cold_str;
