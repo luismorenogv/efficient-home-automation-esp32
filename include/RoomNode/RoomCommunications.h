@@ -1,9 +1,9 @@
 /**
  * @file RoomNodeCommunications.h
- * @brief Declaration of RoomNodeCommunications class for RoomNode communication
+ * @brief Handles communication for RoomNode, waiting for ACK messages from Master.
  * 
  * @author Luis Moreno
- * @date Dec 5, 2024
+ * @date Dec 8, 2024
  */
 
 #pragma once
@@ -14,8 +14,14 @@
 class RoomCommunications : public CommunicationsBase {
 public:
     RoomCommunications();
+
+    // Waits for an ACK of a given type or times out
     bool waitForAck(MessageType expected_ack, unsigned long timeout_ms);
+
+    // Called when an ACK is received, signals semaphore if it matches
     void ackReceived(uint8_t *mac_addr, MessageType acked_msg);
+
+    // Sends a message to the master (assumes one peer)
     void sendMsg(const uint8_t *data, size_t size);
 
 private:

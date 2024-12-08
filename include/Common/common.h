@@ -16,7 +16,10 @@ constexpr uint8_t MAX_WIFI_CHANNEL = 13;
 constexpr uint8_t TOTAL_FRAMES = 6;
 constexpr uint8_t ID_NOT_VALID = 255;
 
-const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_TIME"};
+// Names of message types for debugging
+const char* const MSG_NAME[TOTAL_FRAMES] = {
+    "JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_TIME"
+};
 
 enum class MessageType : uint8_t {
     JOIN_SENSOR      = 0x00,
@@ -24,7 +27,7 @@ enum class MessageType : uint8_t {
     ACK              = 0x02, 
     TEMP_HUMID       = 0x03,
     NEW_SLEEP_PERIOD = 0x04,
-    NEW_SCHEDULE         = 0x05,
+    NEW_SCHEDULE     = 0x05,
 };
 
 enum class NodeType : uint8_t {
@@ -37,11 +40,13 @@ enum class TimeType : uint8_t {
     COLD = 0x01,
 };
 
+// Simple ACK message linking an ACK to a previous message
 struct AckMsg {
     MessageType type = MessageType::ACK;   
     MessageType acked_msg; 
 } __attribute__((packed));
 
+// Holds temperature/humidity data for a room
 struct TempHumidMsg {
     MessageType type = MessageType::TEMP_HUMID;   
     uint8_t room_id;
@@ -49,21 +54,26 @@ struct TempHumidMsg {
     float humidity;
 } __attribute__((packed));
 
+// Holds updated sleep period data
 struct NewSleepPeriodMsg {
     MessageType type = MessageType::NEW_SLEEP_PERIOD;   
     uint32_t new_period_ms;
 } __attribute__((packed));
 
+// Holds sensor join request data
 struct JoinSensorMsg {
     MessageType type = MessageType::JOIN_SENSOR;
     uint8_t room_id;
     uint32_t sleep_period_ms;
 } __attribute__((packed));
 
+// Basic time structure for daily schedules
 struct Time {
     uint8_t hour;
     uint8_t min;
 };
+
+// Holds room join request data, including warm/cold times
 struct JoinRoomMsg {
     MessageType type = MessageType::JOIN_ROOM;
     uint8_t room_id;
@@ -71,12 +81,14 @@ struct JoinRoomMsg {
     Time cold;
 } __attribute__((packed));
 
+// Holds new schedule data
 struct NewScheduleMsg {
     MessageType type = MessageType::NEW_SCHEDULE;   
     Time cold;
     Time warm;
 } __attribute__((packed));
 
+// Union of all message types
 union AllMessages {
     AckMsg ack;
     TempHumidMsg tempHumid;
@@ -87,9 +99,9 @@ union AllMessages {
 
 #define MAX_MSG_SIZE sizeof(union AllMessages)
 
+// Generic incoming message structure for queue handling
 struct IncomingMsg {
     uint8_t mac_addr[MAC_ADDRESS_LENGTH];
     uint8_t data[MAX_MSG_SIZE];
     uint32_t len;
 } __attribute__((packed));
-

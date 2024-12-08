@@ -2,22 +2,29 @@
  * @file PowerManager.h
  * @brief Handles deep sleep functionality for SensorNode
  * 
- * Allows updating the sleep period based on instructions from the MasterDevice.
- * 
  * @author Luis Moreno
- * @date Nov 25, 2024
+ * @date Dec 8, 2024
  */
 #pragma once
 #include <Arduino.h>
 
 class PowerManager {
 public:
+    // Constructs with pointer to sleep duration stored in RTC memory
     PowerManager(uint32_t* sleep_duration_ms);
+
+    // Enters deep sleep for the configured duration
     void enterDeepSleep();
+
+    // Enters deep sleep indefinitely
     void enterPermanentDeepSleep();
+
+    // Updates the sleep duration
     void updateSleepPeriod(uint32_t new_sleep_duration_ms);
+
+    // Retrieves the current sleep period
     uint32_t getSleepPeriod();
 
 private:
-    uint32_t* sleep_duration_ms; // Stored in RTC memory to persist across deep sleep cycles
+    uint32_t* sleep_duration_ms; // Stored across deep sleep cycles
 };
