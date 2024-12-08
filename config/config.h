@@ -42,7 +42,13 @@ constexpr uint8_t MAX_PEERS = 1;
  *************************************************************/
 #ifdef MODE_ROOM
 constexpr uint8_t ROOM_ID = 0;
+
 constexpr uint8_t LD2410_PIN = 14;
+constexpr uint8_t MAXIMUM_MOVING_DISTANCE_GATE = 8;
+constexpr uint8_t MAXIMUM_STILL_DISTANCE_GATE = 8;
+constexpr uint8_t UNMANNED_DURATION_S = 10;
+constexpr uint8_t SENSITIVITY = 60;
+
 constexpr uint8_t MAX_PEERS = 1;
 constexpr unsigned long ACK_TIMEOUT_MS = 5000;     // 5 seconds
 constexpr uint8_t MAX_RETRIES = 2;
@@ -54,5 +60,5 @@ constexpr uint16_t LIGHTS_CONTROL_PERIOD = 1000;
 constexpr uint16_t NTPSYNC_PERIOD = 30*60*1000000; // 30 minutes
 constexpr uint8_t LDR_PIN = 4;
 constexpr uint8_t IR_LED_PIN = 15;
-constexpr uint8_t TRANSMITTER_PIN = 16;
+constexpr uint8_t TRANSMITTER_PIN = 13;
 #endif
