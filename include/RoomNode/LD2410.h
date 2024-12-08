@@ -14,12 +14,16 @@
 
 class LD2410 {
 public:
-    LD2410(QueueHandle_t queue);
+    LD2410();
     ~LD2410();
 
     // Delete copy constructor and assignment operator to prevent multiple instances
     LD2410(const LD2410&) = delete;
     LD2410& operator=(const LD2410&) = delete;
+
+    void setQueue(QueueHandle_t queue);
+
+    void start();
 
 private:
     static void IRAM_ATTR staticPresenceISR();

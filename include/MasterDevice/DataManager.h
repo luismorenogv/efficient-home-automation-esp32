@@ -39,15 +39,14 @@ struct SensorData {
 struct ControlData {
     bool registered;
     uint8_t mac_addr[MAC_ADDRESS_LENGTH];
-    uint8_t warm_hour;
-    uint8_t warm_min;
-    uint8_t cold_hour;
-    uint8_t cold_min;
+    Time cold;
+    Time warm;
     bool pending_update;
 
-    ControlData() : registered(false), warm_hour(0), warm_min(0),
-                    cold_hour(0), cold_min(0), pending_update(false) {
+    ControlData() : registered(false), pending_update(false) {
         memset(mac_addr, 0, sizeof(mac_addr));
+        memset(&cold, 0, sizeof(cold));
+        memset(&warm, 0, sizeof(warm));
     }
 };
 

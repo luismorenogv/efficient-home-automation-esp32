@@ -1,6 +1,8 @@
 /**
  * @file main.cpp
  * @brief Main file for RoomNode
+ * 
+ * @author Luis Moreno
  * @date Dec 2, 2024
  */
 

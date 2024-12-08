@@ -151,8 +151,8 @@ void MasterController::espnowTask(void* pvParameter) {
                         JoinRoomMsg* payload = reinterpret_cast<JoinRoomMsg*>(msg.data);
                         uint8_t room_id = payload->room_id;
                         self->dataManager.controlSetup(room_id, msg.mac_addr, 
-                                                       payload->warm_hour, payload->warm_min, 
-                                                       payload->cold_hour, payload->cold_min);
+                                                       payload->warm.hour, payload->warm.min, 
+                                                       payload->cold.hour, payload->cold.min);
                         self->communications.registerPeer(msg.mac_addr, WiFi.channel());
                         self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
                         Serial.printf("Received JOIN_ROOM from room %u with warm/cold times\r\n", room_id);

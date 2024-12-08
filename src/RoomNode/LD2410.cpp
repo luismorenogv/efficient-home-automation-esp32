@@ -2,7 +2,7 @@
  * @file LD2410.cpp
  * @brief Implementation of LD2410 class of RoomNode
  *
- * @author 
+ * @author Luis Moreno
  * @date Dec 4, 2024
  */
 
@@ -11,17 +11,24 @@
 // Initialize the static instance pointer to nullptr
 LD2410* LD2410::instance = nullptr;
 
-LD2410::LD2410(QueueHandle_t queue) : presenceQueue(queue) {
+LD2410::LD2410(){
     instance = this; // Assign the current instance to the static pointer
 
     pinMode(LD2410_PIN, INPUT);
-    attachInterrupt(digitalPinToInterrupt(LD2410_PIN), staticPresenceISR, CHANGE);
 }
 
 LD2410::~LD2410() {
     // Clean up: Detach the interrupt and reset the instance pointer
     detachInterrupt(digitalPinToInterrupt(LD2410_PIN));
     instance = nullptr;
+}
+
+void LD2410::setQueue(QueueHandle_t queue){
+    presenceQueue = queue;
+}
+
+void LD2410::start(){
+    attachInterrupt(digitalPinToInterrupt(LD2410_PIN), staticPresenceISR, CHANGE);
 }
 
 void IRAM_ATTR LD2410::staticPresenceISR() {

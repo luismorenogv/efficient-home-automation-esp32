@@ -168,10 +168,10 @@ void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, uint8_t
     if (roomIdIsValid(room_id)) {
         xSemaphoreTake(controlMutex, portMAX_DELAY);
             memcpy(rooms[room_id].control.mac_addr, mac_addr, MAC_ADDRESS_LENGTH);
-            rooms[room_id].control.warm_hour = warm_hour;
-            rooms[room_id].control.warm_min = warm_min;
-            rooms[room_id].control.cold_hour = cold_hour;
-            rooms[room_id].control.cold_min = cold_min;
+            rooms[room_id].control.warm.hour = warm_hour;
+            rooms[room_id].control.warm.min = warm_min;
+            rooms[room_id].control.cold.hour = cold_hour;
+            rooms[room_id].control.cold.min = cold_min;
             rooms[room_id].control.registered = true; 
             rooms[room_id].control.pending_update = false; // No pending update initially
         xSemaphoreGive(controlMutex);

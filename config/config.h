@@ -44,4 +44,15 @@ constexpr uint8_t MAX_PEERS = 1;
 constexpr uint8_t ROOM_ID = 0;
 constexpr uint8_t LD2410_PIN = 14;
 constexpr uint8_t MAX_PEERS = 1;
+constexpr unsigned long ACK_TIMEOUT_MS = 5000;     // 5 seconds
+constexpr uint8_t MAX_RETRIES = 2;
+constexpr uint8_t DEFAULT_HOUR_COLD = 9;
+constexpr uint8_t DEFAULT_MIN_COLD = 30;
+constexpr uint8_t DEFAULT_HOUR_WARM = 19;
+constexpr uint8_t DEFAULT_MIN_WARM = 0;
+constexpr uint16_t LIGHTS_CONTROL_PERIOD = 1000;
+constexpr uint16_t NTPSYNC_PERIOD = 30*60*1000000; // 30 minutes
+constexpr uint8_t LDR_PIN = 4;
+constexpr uint8_t IR_LED_PIN = 15;
+constexpr uint8_t TRANSMITTER_PIN = 16;
 #endif

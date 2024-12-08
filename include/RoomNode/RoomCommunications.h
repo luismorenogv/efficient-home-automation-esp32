@@ -14,9 +14,9 @@
 class RoomCommunications : public CommunicationsBase {
 public:
     RoomCommunications();
-    bool waitForAck(uint8_t* mac_addr, MessageType expected_ack, unsigned long timeout_ms);
+    bool waitForAck(MessageType expected_ack, unsigned long timeout_ms);
+    void ackReceived(uint8_t *mac_addr, MessageType acked_msg);
     void sendMsg(const uint8_t *data, size_t size);
-    SemaphoreHandle_t getSemphr(uint8_t* mac_address);
 
 private:
     void onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) override;
