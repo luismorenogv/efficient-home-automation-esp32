@@ -233,7 +233,6 @@ function updateSensorData(data) {
         title.textContent = `${data.room_name}`;
         roomDiv.appendChild(title);
 
-        // Sensor info paragraphs
         const tempPara = document.createElement('p');
         tempPara.id = `temp-${data.room_id}`;
         roomDiv.appendChild(tempPara);
@@ -246,9 +245,6 @@ function updateSensorData(data) {
         timePara.id = `time-${data.room_id}`;
         roomDiv.appendChild(timePara);
 
-        // Sleep period dropdown for sensor (only if sensor data present)
-        // We'll handle conditionally later.
-
         const historyButton = document.createElement('button');
         historyButton.textContent = 'Show History';
         historyButton.onclick = () => {
@@ -257,7 +253,6 @@ function updateSensorData(data) {
         historyButton.style.marginRight = '10px';
         roomDiv.appendChild(historyButton);
 
-        // Control node times (warm/cold)
         const warmPara = document.createElement('p');
         warmPara.id = `warm-${data.room_id}`;
         roomDiv.appendChild(warmPara);
@@ -269,7 +264,6 @@ function updateSensorData(data) {
         container.appendChild(roomDiv);
     }
 
-    // Update sensor data if available
     if (typeof data.temperature !== 'undefined') {
         document.getElementById(`temp-${data.room_id}`).textContent = `Temperature: ${data.temperature.toFixed(2)} °C`;
     } else {
@@ -289,51 +283,7 @@ function updateSensorData(data) {
         document.getElementById(`time-${data.room_id}`).textContent = ``;
     }
 
-    // If sensor node registered, show sleep period dropdown
-    if (typeof data.sleep_period_ms !== 'undefined') {
-        let sleepSelect = document.getElementById(`sleep-${data.room_id}`);
-        if (!sleepSelect) {
-            const sleepLabel = document.createElement('label');
-            sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
-            sleepLabel.textContent = `Sleep Period: `;
-            roomDiv.insertBefore(sleepLabel, roomDiv.lastChild);
-
-            sleepSelect = document.createElement('select');
-            sleepSelect.id = `sleep-${data.room_id}`;
-            const options = [
-                { text: '5 min', value: '5min' },
-                { text: '15 min', value: '15min' },
-                { text: '30 min', value: '30min' },
-                { text: '1 h', value: '1h' },
-                { text: '3 h', value: '3h' },
-                { text: '6 h', value: '6h' },
-            ];
-
-            options.forEach(opt => {
-                const optionElement = document.createElement('option');
-                optionElement.value = opt.value;
-                optionElement.textContent = opt.text;
-                sleepSelect.appendChild(optionElement);
-            });
-
-            sleepSelect.onchange = () => {
-                const selected = sleepSelect.value;
-                const message = {
-                    action: "setSleepPeriod",
-                    room_id: data.room_id,
-                    sleep_period: selected
-                };
-                socket.send(JSON.stringify(message));
-                console.log(`Sent sleep period update: ${JSON.stringify(message)}`);
-            };
-
-            roomDiv.insertBefore(sleepSelect, roomDiv.lastChild);
-        }
-
-        sleepSelect.value = sleepMsToStr(data.sleep_period_ms);
-    }
-
-    // Update control node data if available
+    // Update warm/cold times
     if (typeof data.warm_time !== 'undefined') {
         document.getElementById(`warm-${data.room_id}`).textContent = `Warm Mode: ${data.warm_time}`;
     } else {
@@ -345,8 +295,58 @@ function updateSensorData(data) {
     } else {
         document.getElementById(`cold-${data.room_id}`).textContent = ``;
     }
-}
 
+    // If RoomNode registered (control data present), allow schedule changes
+    // data includes room.control info only if registered:
+    if (typeof data.warm_time !== 'undefined' && typeof data.cold_time !== 'undefined') {
+        // Add schedule controls if not already present
+        let scheduleForm = document.getElementById(`schedule-form-${data.room_id}`);
+        if (!scheduleForm) {
+            scheduleForm = document.createElement('div');
+            scheduleForm.id = `schedule-form-${data.room_id}`;
+
+            // Warm Input
+            const warmInput = document.createElement('input');
+            warmInput.type = 'time';
+            warmInput.id = `warm-input-${data.room_id}`;
+            warmInput.value = data.warm_time; // "HH:MM"
+
+            // Cold Input
+            const coldInput = document.createElement('input');
+            coldInput.type = 'time';
+            coldInput.id = `cold-input-${data.room_id}`;
+            coldInput.value = data.cold_time; // "HH:MM"
+
+            const setScheduleButton = document.createElement('button');
+            setScheduleButton.textContent = 'Set Schedule';
+            setScheduleButton.onclick = () => {
+                const warmVal = document.getElementById(`warm-input-${data.room_id}`).value; 
+                const coldVal = document.getElementById(`cold-input-${data.room_id}`).value;
+
+                // Send setSchedule action
+                const message = {
+                    action: "setSchedule",
+                    room_id: data.room_id,
+                    warm_time: warmVal,
+                    cold_time: coldVal
+                };
+                socket.send(JSON.stringify(message));
+                console.log(`Sent setSchedule: ${JSON.stringify(message)}`);
+            };
+
+            scheduleForm.appendChild(document.createTextNode("Warm Mode Time: "));
+            scheduleForm.appendChild(warmInput);
+            scheduleForm.appendChild(document.createElement('br'));
+
+            scheduleForm.appendChild(document.createTextNode("Cold Mode Time: "));
+            scheduleForm.appendChild(coldInput);
+            scheduleForm.appendChild(document.createElement('br'));
+
+            scheduleForm.appendChild(setScheduleButton);
+            roomDiv.appendChild(scheduleForm);
+        }
+    }
+}
 
 
 function sleepMsToStr(ms) {

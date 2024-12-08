@@ -3,13 +3,14 @@
  * @brief Declaration of MasterCommunications class for MasterDevice communication
  * 
  * @author Luis Moreno
- * @date Dec 5, 2024
+ * @date Dec 8, 2024
  */
 
 #pragma once
 
 #include "Common/CommunicationsBase.h"
 
+// Extends the CommunicatinsBase class tailoring to Master's needs
 class MasterCommunications : public CommunicationsBase {
 public:
     MasterCommunications();

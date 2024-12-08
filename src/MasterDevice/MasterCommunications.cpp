@@ -3,15 +3,17 @@
  * @brief Implementation of MasterCommunications class for MasterDevice communication
  * 
  * @author Luis Moreno
- * @date Dec 5, 2024
+ * @date Dec 8, 2024
  */
 
 #include "MasterDevice/MasterCommunications.h"
 
+// Constructor sets the singleton instance
 MasterCommunications::MasterCommunications() : CommunicationsBase() {
     instance = this;
 }
 
+// Handles received data by enqueuing it for processing
 void MasterCommunications::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) {
     // Enqueue the message for processing in the FreeRTOS task
     IncomingMsg incoming_msg;
