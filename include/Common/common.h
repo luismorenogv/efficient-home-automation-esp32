@@ -2,7 +2,6 @@
  * @file common.h
  * @brief Shared constants, enums, and structures for Master and Sensor Nodes
  * 
- * Note: JoinRoomMsg now contains hour and minute fields for warm/cold switches.
  * 
  * @author Luis Moreno
  * @date Nov 24, 2024
@@ -14,10 +13,10 @@
 
 constexpr uint8_t MAC_ADDRESS_LENGTH = 6;
 constexpr uint8_t MAX_WIFI_CHANNEL = 13;
-constexpr uint8_t TOTAL_FRAMES = 5;
+constexpr uint8_t TOTAL_FRAMES = 6;
 constexpr uint8_t ID_NOT_VALID = 255;
 
-const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD"};
+const char* const MSG_NAME[TOTAL_FRAMES] = {"JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_TIME"};
 
 enum class MessageType : uint8_t {
     JOIN_SENSOR      = 0x00,
@@ -25,11 +24,17 @@ enum class MessageType : uint8_t {
     ACK              = 0x02, 
     TEMP_HUMID       = 0x03,
     NEW_SLEEP_PERIOD = 0x04,
+    NEW_SCHEDULE         = 0x05,
 };
 
 enum class NodeType : uint8_t {
     SENSOR = 0x00,
     ROOM   = 0x01,
+};
+
+enum class TimeType : uint8_t {
+    WARM = 0x00,
+    COLD = 0x01,
 };
 
 struct AckMsg {
@@ -55,13 +60,21 @@ struct JoinSensorMsg {
     uint32_t sleep_period_ms;
 } __attribute__((packed));
 
+struct Time {
+    uint8_t hour;
+    uint8_t min;
+};
 struct JoinRoomMsg {
     MessageType type = MessageType::JOIN_ROOM;
     uint8_t room_id;
-    uint8_t warm_hour;
-    uint8_t warm_min;
-    uint8_t cold_hour;
-    uint8_t cold_min;
+    Time warm;
+    Time cold;
+} __attribute__((packed));
+
+struct NewScheduleMsg {
+    MessageType type = MessageType::NEW_SCHEDULE;   
+    Time cold;
+    Time warm;
 } __attribute__((packed));
 
 union AllMessages {

@@ -14,7 +14,7 @@ RoomCommunications::RoomCommunications()
     ackSemaphore = xSemaphoreCreateBinary();
 }
 
-bool RoomCommunications::waitForAck(uint8_t* mac_addr, MessageType expected_ack, unsigned long timeout_ms) {
+bool RoomCommunications::waitForAck(MessageType expected_ack, unsigned long timeout_ms) {
     // Set expected ACK
     ack_received = false;
     last_acked_msg = expected_ack;
@@ -28,6 +28,20 @@ bool RoomCommunications::waitForAck(uint8_t* mac_addr, MessageType expected_ack,
     return false;
 }
 
+void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg){
+    if (memcmp(mac_addr, master_mac_addr, sizeof(mac_addr)) == 0){
+        if (acked_msg == last_acked_msg){
+            ack_received = true;
+            xSemaphoreGive(ackSemaphore); // Signal ACK reception
+            Serial.println("ACK received from master");
+        } else {
+            Serial.println("Received ACK for incorrect message type.");
+        }
+    } else {
+        Serial.println("Recevied ACK from invalid MAC address");
+    }
+}
+
 void RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
     // Assume only one peer (master)
     if (numPeers > 0) {
@@ -35,8 +49,4 @@ void RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
     } else {
         Serial.println("No peers registered.");
     }
-}
-
-SemaphoreHandle_t RoomCommunications::getSemphr(uint8_t* mac_addr){
-    return ackSemaphore;
 }

@@ -193,7 +193,6 @@ void CommunicationsBase::setQueue(QueueHandle_t queue) {
 
 void CommunicationsBase::onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len) {
     if (instance) {
-        Serial.println("Message received");
         instance->onDataRecv(mac_addr, data, len);
     }
 }

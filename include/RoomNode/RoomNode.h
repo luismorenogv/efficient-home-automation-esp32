@@ -13,8 +13,10 @@
 #include "config.h"
 #include "Common/NTPClient.h"
 #include "RoomCommunications.h"
-#include "DataManager.h"
-
+#include "LD2410.h"
+#include "Lights.h"
+#include "Common/secrets.h"
+#include "AirConditioner.h"
 
 class RoomNode {
 public:
@@ -26,7 +28,9 @@ public:
 private:
     NTPClient ntpClient;
     RoomCommunications communications;
-    DataManager dataManager;
+    LD2410 presenceSensor;
+    Lights lights;
+    AirConditioner airConditioner;
     static RoomNode* instance;
 
     uint8_t wifi_channel;
@@ -44,5 +48,5 @@ private:
     static void lightsControlTask(void* pvParameter);
     static void presenceTask(void* pvParameter);
     static void NTPSyncTask(void* pvParameter);
-
+    void tryLater();
 };
