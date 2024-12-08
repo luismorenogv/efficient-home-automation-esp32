@@ -1,9 +1,9 @@
 /**
  * @file RoomNode.h
- * @brief Declaration of RoomNode class to coordinate all modules
+ * @brief Coordinates modules in the RoomNode: presence, lights, AC, and communication.
  *
  * @author Luis Moreno
- * @date Dec 2, 2024
+ * @date Dec 8, 2024
  */
 #pragma once
 
@@ -21,8 +21,14 @@
 class RoomNode {
 public:
     RoomNode(uint8_t room_id);
+
+    // Initializes node components and network
     void initialize();
+
+    // Attempts to join the master network
     bool joinNetwork();
+
+    // Creates tasks and starts node operation
     void run();
 
 private:
@@ -44,9 +50,12 @@ private:
     TaskHandle_t presenceTaskHandle;
     TaskHandle_t NTPSyncTaskHandle;
 
+    // Task functions
     static void espnowTask(void* pvParameter);
     static void lightsControlTask(void* pvParameter);
     static void presenceTask(void* pvParameter);
     static void NTPSyncTask(void* pvParameter);
+
+    // If initialization fails, sleeps to retry later
     void tryLater();
 };

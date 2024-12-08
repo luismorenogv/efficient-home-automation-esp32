@@ -1,9 +1,9 @@
 /**
  * @file LD2410.h
- * @brief Declaration of LD2410 class for managing presence sensor
+ * @brief Manages LD2410 presence sensor configuration and interrupts.
  *
  * @author Luis Moreno
- * @date Dec 4, 2024
+ * @date Dec 8, 2024
  */
 
 #pragma once
@@ -20,23 +20,28 @@ public:
     LD2410(const LD2410&) = delete;
     LD2410& operator=(const LD2410&) = delete;
 
+    // Sets the queue to post presence states
     void setQueue(QueueHandle_t queue);
+
+    // Starts the interrupt for presence detection
     void start();
 
-    bool initialize(); // New method to configure LD2410
+    // Configures sensor parameters via UART
+    bool initialize();
 
 private:
     static void IRAM_ATTR staticPresenceISR();
     void IRAM_ATTR presenceISR();
 
-    static LD2410* instance;
-    QueueHandle_t presenceQueue;
-
-    // Utility methods for configuration:
+    // Sends a config command to the sensor
     bool sendCommand(const uint8_t* cmd, size_t len);
+
+    // Waits for an ACK response to the last command
     bool waitForAck(uint16_t expectedCmdWord, uint8_t expectedStatus = 0);
 
-    // Reading from UART:
+    // For potential future use: reads UART response
     bool readResponse(uint8_t* buffer, size_t bufferSize, uint32_t timeoutMs = 100);
-};
 
+    static LD2410* instance;
+    QueueHandle_t presenceQueue;
+};

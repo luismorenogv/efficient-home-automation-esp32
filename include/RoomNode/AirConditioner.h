@@ -1,9 +1,9 @@
 /**
  * @file AirConditioner.h
- * @brief Declaration of AirConditioner class for controlling the Panasonic AC with IR signals
+ * @brief Controls a Panasonic AC via IR signals for the RoomNode.
  *
  * @author Luis Moreno
- * @date Dec 4, 2024
+ * @date Dec 8, 2024
  */
 
 #pragma once
@@ -18,10 +18,11 @@ class AirConditioner {
 public:
     AirConditioner();
 
-    // Delete copy constructor and assignment operator to prevent multiple instances
+    // Prevent multiple instances
     AirConditioner(const AirConditioner&) = delete;
     AirConditioner& operator=(const AirConditioner&) = delete;
 
+    // Sends IR command to turn the AC off
     void turnOff();
 
 private:

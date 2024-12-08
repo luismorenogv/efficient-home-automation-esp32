@@ -2,13 +2,8 @@
  * @file SensorNode.h
  * @brief Manages sensor readings and communication for the SensorNode device.
  * 
- * On the first cycle, attempts to join the network and synchronize with MasterDevice.
- * On subsequent cycles, sends temperature/humidity data, and then sleeps.
- * 
- * Uses SHT31 for more accurate readings compared to DHT22.
- * 
  * @author Luis Moreno
- * @date Nov 25, 2024
+ * @date Dec 8, 2024
  */
 #pragma once
 
@@ -23,10 +18,19 @@ constexpr uint8_t SCL_PIN = 22;
 
 class SensorNode {
 public:
-    SensorNode(const uint8_t room_id, uint32_t* sleep_duration, uint8_t* channel_wifi, bool* first_cycle);
+    // Constructs with room ID, pointers to stored settings, and first_cycle flag
+    SensorNode(uint8_t room_id, uint32_t* sleep_duration, uint8_t* channel_wifi, bool* first_cycle);
+
+    // Initializes sensor and ESP-NOW communication
     bool initialize();
+
+    // Reads sensor data and sends it, if joined to the master
     void run();
+
+    // Enters deep sleep
     void goSleep();
+
+    // Attempts to join master network on first run
     bool joinNetwork();
 
 private:
@@ -34,10 +38,12 @@ private:
     SHT31Sensor sht31Sensor;
     ESPNowHandler espNowHandler;
     PowerManager powerManager;
-
     uint8_t* channel_wifi;
     bool* first_cycle;
 
+    // Sends sensor data message
     void sendData();
+
+    // Waits for an ACK after sending a message
     bool waitForAck();
 };
