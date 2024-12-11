@@ -18,7 +18,7 @@ NTPClient::NTPClient() {
 
 // Initializes the NTP client and synchronizes time
 void NTPClient::initialize() {
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    configTime(3600, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
 
     // Wait until time is synchronized
@@ -26,7 +26,7 @@ void NTPClient::initialize() {
     const int retry_count = 10;
     while (!getLocalTime(&timeinfo) && retry < retry_count) {
         Serial.println("Waiting for NTP time synchronization");
-        delay(2000);
+        vTaskDelay(pdMS_TO_TICKS(1000));
         retry++;
     }
 
