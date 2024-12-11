@@ -1,31 +1,49 @@
 /**
  * @file SensorNode.h
- * @brief Declaration of SensorNode class for handling sensor readings and ESP-NOW communication
- *
+ * @brief Manages sensor readings and communication for the SensorNode device.
+ * 
  * @author Luis Moreno
- * @date Nov 25, 2024
+ * @date Dec 8, 2024
  */
-
 #pragma once
 
-#include "SensorNode/DHTSensor.h"
-#include "SensorNode/ESPNowHandler.h"
-#include "SensorNode/PowerManager.h"
+#include "SHT31Sensor.h"
+#include "ESPNowHandler.h"
+#include "PowerManager.h"
+#include "esp_wifi.h"
+
+constexpr uint8_t SHT31_ADDRESS = 0x44;
+constexpr uint8_t SDA_PIN = 21;
+constexpr uint8_t SCL_PIN = 22;
 
 class SensorNode {
 public:
-    SensorNode(const uint8_t room_id, uint32_t* sleep_duration);
-    bool initialize(uint8_t wifi_channel);
+    // Constructs with room ID, pointers to stored settings, and first_cycle flag
+    SensorNode(uint8_t room_id, uint32_t* sleep_duration, uint8_t* channel_wifi, bool* first_cycle);
+
+    // Initializes sensor and ESP-NOW communication
+    bool initialize();
+
+    // Reads sensor data and sends it, if joined to the master
     void run();
+
+    // Enters deep sleep
     void goSleep();
+
+    // Attempts to join master network on first run
     bool joinNetwork();
 
 private:
     uint8_t room_id;
-    DHTSensor dhtSensor;
+    SHT31Sensor sht31Sensor;
     ESPNowHandler espNowHandler;
     PowerManager powerManager;
+    uint8_t* channel_wifi;
+    bool* first_cycle;
 
+    // Sends sensor data message
     void sendData();
+
+    // Waits for an ACK after sending a message
     bool waitForAck();
 };
