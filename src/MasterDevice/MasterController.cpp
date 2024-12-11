@@ -154,6 +154,9 @@ void MasterController::espnowTask(void* pvParameter) {
                             // Update retry mechanism
                             self->pendingSleepUpdate[room_id].attempts++;
                             self->pendingSleepUpdate[room_id].lastAttemptMillis = millis();
+                            if (self->pendingSleepUpdate[room_id].attempts > MAX_RETRIES){
+                                Serial.printf("Communication with sensorNode with ID %u isn't working correctly.\r\n", room_id);
+                            }
                         } else {
                             Serial.printf("Failed to retrieve MAC address for room %u. Cannot send NEW_SLEEP_PERIOD.\r\n", room_id);
                         }
@@ -261,33 +264,6 @@ void MasterController::updateCheckTask(void* pvParameter) {
 
 void MasterController::checkAndResendUpdates() {
     for (uint8_t i = 0; i < NUM_ROOMS; i++) {
-        // Handle sleep period updates
-        if (dataManager.isPendingUpdate(i, NodeType::SENSOR)) {
-            uint32_t nowMs = millis();
-            if (pendingSleepUpdate[i].attempts < MAX_RETRIES && 
-                (nowMs - pendingSleepUpdate[i].lastAttemptMillis > RETRY_INTERVAL_MS)) {
-                
-                uint32_t new_period = dataManager.getNewSleepPeriod(i);
-                NewSleepPeriodMsg new_period_msg;
-                new_period_msg.type = MessageType::NEW_SLEEP_PERIOD;
-                new_period_msg.new_period_ms = new_period;
-
-                uint8_t sensor_mac[MAC_ADDRESS_LENGTH];
-                if (dataManager.getMacAddr(i, NodeType::SENSOR, sensor_mac)) {
-                    communications.sendMsg(sensor_mac, reinterpret_cast<uint8_t*>(&new_period_msg), sizeof(NewSleepPeriodMsg));
-                    Serial.printf("Resent NEW_SLEEP_PERIOD to sensor in room %u (attempt %u)\r\n", 
-                                  i, pendingSleepUpdate[i].attempts + 1);
-                    pendingSleepUpdate[i].attempts++;
-                    pendingSleepUpdate[i].lastAttemptMillis = nowMs;
-                } else {
-                    Serial.printf("Failed to retrieve MAC address for room %u. Cannot resend NEW_SLEEP_PERIOD.\r\n", i);
-                }
-            }
-        } else {
-            // Reset attempts if no longer pending
-            pendingSleepUpdate[i].attempts = 0;
-        }
-
         // Handle schedule updates
         if (dataManager.isPendingUpdate(i, NodeType::ROOM)) {
             uint32_t nowMs = millis();
