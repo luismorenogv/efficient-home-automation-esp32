@@ -177,6 +177,7 @@ function displayHistoryModal(data) {
 
 // Updates sensor data display for a room
 function updateSensorData(data) {
+    console.log(data);
     const container = document.getElementById('sensor-data');
     let roomDiv = document.getElementById(`room-${data.room_id}`);
 
@@ -202,9 +203,11 @@ function updateSensorData(data) {
         roomDiv.appendChild(timePara);
 
         const historyButton = document.createElement('button');
+        historyButton.id = `history-${data.room_id}`;
         historyButton.textContent = 'Show History';
         historyButton.onclick = () => showHistoryModal(data.room_id);
         historyButton.style.marginRight = '10px';
+        historyButton.style.display = 'none';
         roomDiv.appendChild(historyButton);
 
         const warmPara = document.createElement('p');
@@ -218,16 +221,23 @@ function updateSensorData(data) {
         container.appendChild(roomDiv);
     }
 
-    // Update displayed sensor values
-    document.getElementById(`temp-${data.room_id}`).textContent = 
-        (typeof data.temperature !== 'undefined') 
-            ? `Temperature: ${data.temperature.toFixed(2)} °C` 
-            : 'No SensorNode registered';
+    // Show the getHistory button when temperature and humidity data become available
+    const historyButton = document.getElementById(`history-${data.room_id}`);
+    if (historyButton) {
+        if (data.registered) {
+            historyButton.style.display = 'inline-block';
+        } else {
+            console.log(`Room ${data.room_id} is not registered or data value is undefined.`);
+        }
+    }
 
-    document.getElementById(`humid-${data.room_id}`).textContent = 
-        (typeof data.humidity !== 'undefined') 
-            ? `Humidity: ${data.humidity.toFixed(2)} %` 
-            : '';
+    // Update displayed sensor values
+    if (typeof data.temperature !== 'undefined'){
+        document.getElementById(`temp-${data.room_id}`).textContent = `Temperature: ${data.temperature.toFixed(2)} °C`; 
+    }
+    if (typeof data.humidity !== 'undefined'){
+        document.getElementById(`humid-${data.room_id}`).textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
+    }
 
     if (typeof data.timestamp !== 'undefined' && data.timestamp > 0) {
         const date = new Date(data.timestamp * 1000);
@@ -235,17 +245,6 @@ function updateSensorData(data) {
     } else {
         document.getElementById(`time-${data.room_id}`).textContent = '';
     }
-
-    // Update warm/cold times if available
-    document.getElementById(`warm-${data.room_id}`).textContent = 
-        (typeof data.warm_time !== 'undefined') 
-            ? `Warm Mode: ${data.warm_time}` 
-            : '';
-
-    document.getElementById(`cold-${data.room_id}`).textContent = 
-        (typeof data.cold_time !== 'undefined') 
-            ? `Cold Mode: ${data.cold_time}` 
-            : '';
 
     // If room control data is available, create schedule form if not present
     if (typeof data.warm_time !== 'undefined' && typeof data.cold_time !== 'undefined') {

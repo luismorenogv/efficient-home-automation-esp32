@@ -78,7 +78,7 @@ void MasterController::initialize() {
     result = xTaskCreatePinnedToCore(
         ntpSyncTask,
         "NTP Sync Task",
-        4096,
+        8192,
         this,
         1,
         &ntpSyncTaskHandle,
@@ -92,7 +92,7 @@ void MasterController::initialize() {
     result = xTaskCreatePinnedToCore(
         updateCheckTask,
         "Update Check Task",
-        4096,
+        8192,
         this,
         1,
         nullptr,
