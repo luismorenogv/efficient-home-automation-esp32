@@ -23,12 +23,11 @@
 // Structure to track pending updates for rooms
 struct PendingUpdate {
     uint8_t room_id;            // Room identifier
-    NodeType node_type;         // Type of node (SENSOR or ROOM)
     uint8_t attempts;           // Number of resend attempts
     uint32_t lastAttemptMillis; // Timestamp of the last attempt
 
     PendingUpdate() 
-        : room_id(0), node_type(NodeType::ROOM), attempts(0), lastAttemptMillis(0) {}
+        : room_id(0), attempts(0), lastAttemptMillis(0) {}
 };
 
 // Class to coordinate communication, data management, and web interfaces
