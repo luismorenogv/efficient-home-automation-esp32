@@ -67,6 +67,17 @@ bool RoomNode::joinNetwork() {
     msg.cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
     msg.warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
 
+    //Start espNow task for ACK message reception
+    BaseType_t result;
+
+    result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 2, &espnowTaskHandle);
+    if (result != pdPASS){
+        Serial.println("Failed ESP-NOW Task");
+        return false;
+    }
+
+    
+
     for (uint8_t i = 0; i < MAX_WIFI_CHANNEL; i++) {
         wifi_channel = (wifi_channel + i) % MAX_WIFI_CHANNEL;
         esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
@@ -97,17 +108,14 @@ bool RoomNode::joinNetwork() {
 // Creates FreeRTOS tasks for handling communications, lights, presence, and NTP sync
 void RoomNode::run() {
     BaseType_t result;
-
-    result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 2, &espnowTaskHandle);
-    if (result != pdPASS) Serial.println("Failed ESP-NOW Task");
-
+    
     result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
     if (result != pdPASS) Serial.println("Failed Lights Task");
 
-    result = xTaskCreate(presenceTask, "Presence Task", 2048, this, 2, &presenceTaskHandle);
+    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 2, &presenceTaskHandle);
     if (result != pdPASS) Serial.println("Failed Presence Task");
 
-    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 2048, this, 2, &NTPSyncTaskHandle);
+    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 2, &NTPSyncTaskHandle);
     if (result != pdPASS) Serial.println("Failed NTPSync Task");
 
     Serial.println("RoomNode running tasks...");
@@ -155,14 +163,17 @@ void RoomNode::lightsControlTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
 
     while (true) {
-        time_t now = time(nullptr);
-        struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
-        uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+        if (self->lights.isOn()){
+            time_t now = time(nullptr);
+            struct tm timeinfo;
+            localtime_r(&now, &timeinfo);
+            uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
-        self->lights.checkAndUpdateMode(current_minutes);
-        self->lights.adjustBrightness(LDR_PIN);
+            self->lights.checkAndUpdateMode(current_minutes);
+            self->lights.adjustBrightness(LDR_PIN);
 
+            
+        }
         vTaskDelay(pdMS_TO_TICKS(LIGHTS_CONTROL_PERIOD));
     }
 }
@@ -172,7 +183,6 @@ void RoomNode::presenceTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
     self->presenceSensor.setQueue(self->presenceQueue);
     self->presenceSensor.start();
-
     bool previous_presence = false;
     while (true) {
         uint8_t presenceState;
@@ -202,6 +212,7 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
 
     while (true) {
+        vTaskDelay(pdMS_TO_TICKS(NTPSYNC_PERIOD));
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
         Serial.print("WiFi reconnecting for NTP");
         while (WiFi.status() != WL_CONNECTED) {
@@ -213,7 +224,6 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
 
         WiFi.disconnect();
         Serial.println("WiFi disconnected after NTP sync");
-        vTaskDelay(pdMS_TO_TICKS(NTPSYNC_PERIOD));
     }
 }
 

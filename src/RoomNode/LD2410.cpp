@@ -30,6 +30,12 @@ void LD2410::setQueue(QueueHandle_t queue) {
 
 // Starts the interrupt-based presence detection
 void LD2410::start() {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uint8_t presenceState = digitalRead(LD2410_PIN);
+    xQueueSendFromISR(presenceQueue, &presenceState, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR();
+    }
     attachInterrupt(digitalPinToInterrupt(LD2410_PIN), staticPresenceISR, CHANGE);
 }
 
