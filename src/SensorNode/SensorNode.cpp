@@ -64,6 +64,9 @@ bool SensorNode::joinNetwork() {
 
 void SensorNode::run() {
     float temperature, humidity;
+
+    espNowHandler.registerPeer((uint8_t*)master_mac_addr, *channel_wifi);
+
     if (!sht31Sensor.readSensorData(temperature, humidity)) {
         Serial.println("Failed to read SHT31!");
     } else {
