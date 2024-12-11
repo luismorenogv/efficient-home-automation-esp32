@@ -228,6 +228,9 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
         obj["humidity"] = last_humid;
         obj["timestamp"] = last_ts;
         obj["sleep_period_ms"] = sleep_ms;
+        obj["registered"] = true;
+    } else{
+        obj["registered"] = false;
     }
 
     // Include control data only if RoomNode is registered
