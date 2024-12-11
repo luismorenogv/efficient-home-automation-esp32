@@ -71,6 +71,7 @@ void ESPNowHandler::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int
             powerManager.updateSleepPeriod(new_sleep->new_period_ms);
             Serial.println("NEW_SLEEP_PERIOD interpreted as ACK");
             ack_received = true;
+            xSemaphoreGive(ackSemaphore);
 
             // Send ACK back to master
             AckMsg ack_msg;

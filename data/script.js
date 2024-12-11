@@ -210,6 +210,44 @@ function updateSensorData(data) {
         historyButton.style.display = 'none';
         roomDiv.appendChild(historyButton);
 
+        // Add sleep period dropdown
+        const sleepLabel = document.createElement('label');
+        sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
+        sleepLabel.textContent = `Sleep Period: `;
+        roomDiv.appendChild(sleepLabel);
+
+        const sleepSelect = document.createElement('select');
+
+        sleepSelect.id = `sleep-${data.room_id}`;
+        const options = [
+            { text: '5 min', value: '5min' },
+            { text: '15 min', value: '15min' },
+            { text: '30 min', value: '30min' },
+            { text: '1 h', value: '1h' },
+            { text: '3 h', value: '3h' },
+            { text: '6 h', value: '6h' },
+        ];
+
+        options.forEach(opt => {
+            const optionElement = document.createElement('option');
+            optionElement.value = opt.value;
+            optionElement.textContent = opt.text;
+            sleepSelect.appendChild(optionElement);
+        });
+
+        sleepSelect.onchange = () => {
+            const selected = sleepSelect.value;
+            const message = {
+                action: "setSleepPeriod",
+                room_id: data.room_id,
+                sleep_period: selected
+            };
+            socket.send(JSON.stringify(message));
+            console.log(`Sent sleep period update: ${JSON.stringify(message)}`);
+        };
+
+        roomDiv.appendChild(sleepSelect);
+
         const warmPara = document.createElement('p');
         warmPara.id = `warm-${data.room_id}`;
         roomDiv.appendChild(warmPara);
@@ -229,6 +267,12 @@ function updateSensorData(data) {
         } else {
             console.log(`Room ${data.room_id} is not registered or data value is undefined.`);
         }
+    }
+
+
+    const sleepSelect = document.getElementById(`sleep-${data.room_id}`);
+    if (sleepSelect && typeof data.sleep_period_ms !== 'undefined'){
+        sleepSelect.value = sleepMsToStr(data.sleep_period_ms);
     }
 
     // Update displayed sensor values
