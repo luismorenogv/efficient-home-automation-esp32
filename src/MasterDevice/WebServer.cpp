@@ -3,7 +3,7 @@
  * @brief Implementation of WebServer class for hosting the web interface
  *
  * @author Luis Moreno
- * @date Nov 25, 2024
+ * @date Dec 8, 2024
  */
 
 #include "MasterDevice/WebServer.h"

@@ -3,14 +3,17 @@
  * @brief Implementation of WebSockets class for handling WebSocket communication with clients
  *
  * @author Luis Moreno
- * @date Nov 25, 2024
+ * @date Dec 8, 2024
  */
 
 #include "MasterDevice/WebSockets.h"
 
-WebSockets::WebSockets(DataManager& dataManager) : ws("/ws"), dataManager(dataManager), sleepDurationCallback(nullptr) {
+// Constructor initializes WebSocket path and callback pointers
+WebSockets::WebSockets(DataManager& dataManager) : ws("/ws"), dataManager(dataManager),
+        sleepDurationCallback(nullptr), scheduleCallback(nullptr) {
 }
 
+// Initializes WebSocket events and adds the handler to the server
 void WebSockets::initialize(AsyncWebServer& server) {
     ws.onEvent([this](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                       void* arg, uint8_t* data, size_t len) {
@@ -24,6 +27,10 @@ void WebSockets::setSleepDurationCallback(void (*callback)(uint8_t, uint32_t)) {
     sleepDurationCallback = callback;
 }
 
+void WebSockets::setScheduleCallback(void (*callback)(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)) {
+    scheduleCallback = callback;
+}
+// Handles WebSocket events such as connections, disconnections, and incoming data
 void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                          void* arg, uint8_t* data, size_t len) {
     switch (type) {
@@ -33,7 +40,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
             // Send current sensor data for all registered rooms upon client connection
             for (uint8_t i = 0; i < NUM_ROOMS; i++) {
                 const RoomData& room_data = dataManager.getRoomData(i);
-                if (room_data.registered) {
+                if (room_data.isRegistered()) {
                     sendDataUpdate(i);
                 }
             }
@@ -51,125 +58,31 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
                     String msg = String((char*)data).substring(0, len);
                     Serial.printf("Received message from client %u: %s\r\n", client->id(), msg.c_str());
 
-                    // Parse JSON message
-                    DynamicJsonDocument doc(512); // Increased capacity for larger messages
+                    DynamicJsonDocument doc(128);
                     DeserializationError error = deserializeJson(doc, msg);
                     if (error) {
                         Serial.println("Failed to parse JSON message from client.");
-                        // Send error response to client
-                        DynamicJsonDocument respDoc(128);
-                        respDoc["status"] = "error";
-                        respDoc["message"] = "Invalid JSON format";
-                        String respStr;
-                        serializeJson(respDoc, respStr);
-                        client->text(respStr);
-                        break;
+                        sendError(client, "Invalid JSON format");
+                        return;
                     }
 
-                    // Validate 'action' field
-                    if (!doc.containsKey("action")) {
+                    JsonObject root = doc.as<JsonObject>();
+                    if (!root.containsKey("action")) {
                         Serial.println("JSON message missing 'action' field.");
-                        // Send error response to client
-                        DynamicJsonDocument respDoc(128);
-                        respDoc["status"] = "error";
-                        respDoc["message"] = "Missing 'action' field";
-                        String respStr;
-                        serializeJson(respDoc, respStr);
-                        client->text(respStr);
-                        break;
+                        sendError(client, "Missing 'action' field'");
+                        return;
                     }
 
-                    String action = doc["action"].as<String>();
+                    String action = root["action"].as<String>();
 
                     if (action == "setSleepPeriod") {
-                        // Handle setSleepPeriod action
-                        if (!doc.containsKey("room_id") || !doc.containsKey("sleep_period")) {
-                            Serial.println("setSleepPeriod action missing required fields.");
-                            // Send error response to client
-                            DynamicJsonDocument respDoc(128);
-                            respDoc["status"] = "error";
-                            respDoc["message"] = "Missing 'room_id' or 'sleep_period'";
-                            String respStr;
-                            serializeJson(respDoc, respStr);
-                            client->text(respStr);
-                            break;
-                        }
-
-                        uint8_t room_id = doc["room_id"];
-                        String periodStr = doc["sleep_period"].as<String>();
-
-                        uint32_t period_ms = 0;
-                        if (periodStr == "5min") {
-                            period_ms = 5 * 60 * 1000;
-                        } else if (periodStr == "15min") {
-                            period_ms = 15 * 60 * 1000;
-                        } else if (periodStr == "30min") {
-                            period_ms = 30 * 60 * 1000;
-                        } else if (periodStr == "1h") {
-                            period_ms = 60 * 60 * 1000;
-                        } else if (periodStr == "3h") {
-                            period_ms = 3 * 60 * 60 * 1000;
-                        } else if (periodStr == "6h") {
-                            period_ms = 6 * 60 * 60 * 1000;
-                        } else {
-                            Serial.println("Unknown sleep period received");
-                            // Send error response to client
-                            DynamicJsonDocument respDoc(128);
-                            respDoc["status"] = "error";
-                            respDoc["message"] = "Unknown sleep period";
-                            String respStr;
-                            serializeJson(respDoc, respStr);
-                            client->text(respStr);
-                            break;
-                        }
-
-                        Serial.printf("Setting sleep period for room %u to %u ms\r\n", room_id, period_ms);
-
-                        if (sleepDurationCallback) {
-                            sleepDurationCallback(room_id, period_ms);
-                        }
-
-                        // Send confirmation to the client
-                        DynamicJsonDocument respDoc(128);
-                        respDoc["status"] = "success";
-                        respDoc["room_id"] = room_id;
-                        respDoc["new_sleep_period_ms"] = period_ms;
-
-                        String respStr;
-                        serializeJson(respDoc, respStr);
-                        client->text(respStr);
-
+                        handleSetSleepPeriod(client, root);
                     } else if (action == "getHistory") {
-                        // Handle getHistory action
-                        if (!doc.containsKey("room_id")) {
-                            Serial.println("getHistory action missing 'room_id' field.");
-                            // Send error response to client
-                            DynamicJsonDocument respDoc(128);
-                            respDoc["status"] = "error";
-                            respDoc["message"] = "Missing 'room_id' field";
-                            String respStr;
-                            serializeJson(respDoc, respStr);
-                            client->text(respStr);
-                            break;
-                        }
+                        handleGetHistory(client, root);
+                    } else if (action == "setSchedule") {
+                        handleSetSchedule(client, root);
 
-                        uint8_t room_id = doc["room_id"];
-                        Serial.printf("Received getHistory request for room %u\r\n", room_id);
-                        sendHistoryData(client, room_id);
-
-                    } else {
-                        Serial.printf("Unknown action received: %s\r\n", action.c_str());
-                        // Send error response to client
-                        DynamicJsonDocument respDoc(128);
-                        respDoc["status"] = "error";
-                        respDoc["message"] = "Unknown action";
-                        String respStr;
-                        serializeJson(respDoc, respStr);
-                        client->text(respStr);
                     }
-
-                } else {
-                    Serial.println("Received non-text or fragmented WebSocket message.");
                 }
             }
             break;
@@ -179,27 +92,163 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
     }
 }
 
+void WebSockets::handleSetSleepPeriod(AsyncWebSocketClient* client, JsonObject& root) {
+    if (!root.containsKey("room_id") || !root.containsKey("sleep_period")) {
+        Serial.println("setSleepPeriod action missing required fields.");
+        sendError(client, "Missing 'room_id' or 'sleep_period'");
+        return;
+    }
+
+    uint8_t room_id = root["room_id"];
+    String periodStr = root["sleep_period"].as<String>();
+
+    uint32_t period_ms = 0;
+    if (periodStr == "5min") {
+        period_ms = 5 * 60 * 1000;
+    } else if (periodStr == "15min") {
+        period_ms = 15 * 60 * 1000;
+    } else if (periodStr == "30min") {
+        period_ms = 30 * 60 * 1000;
+    } else if (periodStr == "1h") {
+        period_ms = 60 * 60 * 1000;
+    } else if (periodStr == "3h") {
+        period_ms = 3 * 60 * 60 * 1000;
+    } else if (periodStr == "6h") {
+        period_ms = 6 * 60 * 60 * 1000;
+    } else {
+        Serial.println("Unknown sleep period received");
+        sendError(client, "Unknown sleep period");
+        return;
+    }
+
+    Serial.printf("Setting sleep period for room %u to %u ms\r\n", room_id, period_ms);
+
+    if (sleepDurationCallback) {
+        sleepDurationCallback(room_id, period_ms);
+    } else {
+        Serial.println("No callback defined");
+        return;
+    }
+
+    DynamicJsonDocument respDoc(128);
+    respDoc["status"] = "success";
+    respDoc["room_id"] = room_id;
+    respDoc["new_sleep_period_ms"] = period_ms;
+
+    String respStr;
+    serializeJson(respDoc, respStr);
+    client->text(respStr);
+}
+
+void WebSockets::handleGetHistory(AsyncWebSocketClient* client, JsonObject& root) {
+    if (!root.containsKey("room_id")) {
+        Serial.println("getHistory action missing 'room_id' field.");
+        sendError(client, "Missing 'room_id' field");
+        return;
+    }
+
+    uint8_t room_id = root["room_id"];
+    Serial.printf("Received getHistory request for room %u\r\n", room_id);
+    sendHistoryData(client, room_id);
+}
+
+void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& root) {
+    if (!root.containsKey("room_id") || !root.containsKey("warm_time") || !root.containsKey("cold_time")) {
+        Serial.println("setSchedule action missing required fields.");
+        DynamicJsonDocument respDoc(128);
+        sendError(client, "Missing 'room_id', 'warm_time', or 'cold_time'");
+        return;
+    }
+
+    uint8_t room_id = root["room_id"];
+    String warmVal = root["warm_time"].as<String>();
+    String coldVal = root["cold_time"].as<String>();
+
+    uint8_t warmHour, warmMin, coldHour, coldMin;
+    if (sscanf(warmVal.c_str(), "%hhu:%hhu", &warmHour, &warmMin) != 2 ||
+        sscanf(coldVal.c_str(), "%hhu:%hhu", &coldHour, &coldMin) != 2) {
+        Serial.println("Invalid time format received.");
+        sendError(client, "Invalid time format, use HH:MM");
+        return;
+    }
+
+    // Check if roomNode is registered
+    RoomData roomData = dataManager.getRoomData(room_id);
+    if (!roomData.control.registered) {
+        Serial.println("RoomNode not registered, cannot set schedule.");
+        sendError(client, "RoomNode not registered");
+        return;
+    }
+
+    if (scheduleCallback) {
+        scheduleCallback(room_id, warmHour, warmMin, coldHour, coldMin);
+    } else{
+        Serial.println("No callback defined");
+        return;
+    }
+
+    DynamicJsonDocument respDoc(128);
+    respDoc["status"] = "success";
+    respDoc["room_id"] = room_id;
+    respDoc["warm"] = warmVal;
+    respDoc["cold"] = coldVal;
+
+    String respStr;
+    serializeJson(respDoc, respStr);
+    client->text(respStr);
+
+    Serial.printf("Requested NEW_SCHEDULE for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", room_id, warmHour, warmMin, coldHour, coldMin);
+}
+
 
 void WebSockets::sendDataUpdate(uint8_t room_id) {
     if (room_id >= NUM_ROOMS) return;
 
     RoomData room = dataManager.getRoomData(room_id);
-    uint16_t idx = room.index == 0 ? MAX_DATA_POINTS - 1 : room.index - 1;
 
-    DynamicJsonDocument doc(256);
+    // If there's no data at all, skip
+    if (!room.isRegistered()) return;
+
+    // For sensor node data
+    uint16_t idx = room.sensor.index == 0 ? MAX_DATA_POINTS - 1 : room.sensor.index - 1;
+    float last_temp = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.temperature[idx] : 0;
+    float last_humid = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.humidity[idx] : 0;
+    time_t last_ts = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.timestamps[idx] : 0;
+    uint32_t sleep_ms = room.sensor.registered ? room.sensor.sleep_period_ms : DEFAULT_SLEEP_DURATION;
+
+    DynamicJsonDocument doc(512);
     JsonObject obj = doc.to<JsonObject>();
     obj["type"] = "update";
     obj["room_id"] = room_id;
     obj["room_name"] = ROOM_NAME[room_id];
-    obj["temperature"] = room.temperature[idx];
-    obj["humidity"] = room.humidity[idx];
-    obj["timestamp"] = room.timestamps[idx];
-    obj["sleep_period_ms"] = room.sleep_period_ms;
+
+    // Include sensor data only if registered
+    if (room.sensor.registered) {
+        obj["temperature"] = last_temp;
+        obj["humidity"] = last_humid;
+        obj["timestamp"] = last_ts;
+        obj["sleep_period_ms"] = sleep_ms;
+        obj["registered"] = true;
+    } else{
+        obj["registered"] = false;
+    }
+
+    // Include control data only if RoomNode is registered
+    if (room.control.registered) {
+        // Format times as HH:MM strings
+        char warm_str[6];
+        snprintf(warm_str, sizeof(warm_str), "%02u:%02u", room.control.warm.hour, room.control.warm.min);
+        char cold_str[6];
+        snprintf(cold_str, sizeof(cold_str), "%02u:%02u", room.control.cold.hour, room.control.cold.min);
+
+        obj["warm_time"] = warm_str;
+        obj["cold_time"] = cold_str;
+    }
 
     String jsonString;
     serializeJson(doc, jsonString);
-
     ws.textAll(jsonString);
+
     Serial.printf("Sent data update via WebSocket for room %u\r\n", room_id);
 }
 
@@ -208,7 +257,7 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     if (room_id >= NUM_ROOMS) return;
 
     RoomData room = dataManager.getRoomData(room_id);
-    uint16_t count = room.valid_data_points;
+    uint16_t count = room.sensor.valid_data_points;
 
     DynamicJsonDocument doc(1024);
     JsonObject obj = doc.to<JsonObject>();
@@ -223,15 +272,15 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
         JsonArray humidArray = obj.createNestedArray("humidity");
         JsonArray timeArray = obj.createNestedArray("timestamps");
 
-        uint16_t idx = room.index;
+        uint16_t idx = room.sensor.index;
         uint16_t startIdx = (idx + MAX_DATA_POINTS - count) % MAX_DATA_POINTS;
 
         for (uint16_t i = 0; i < count; ++i) {
             uint16_t index = (startIdx + i) % MAX_DATA_POINTS;
 
-            float temp = room.temperature[index];
-            float humid = room.humidity[index];
-            time_t ts = room.timestamps[index];
+            float temp = room.sensor.temperature[index];
+            float humid = room.sensor.humidity[index];
+            time_t ts = room.sensor.timestamps[index];
 
             if (ts == 0) continue;
 
@@ -248,3 +297,11 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     Serial.printf("Sent history data to client %u for room %u\r\n", client->id(), room_id);
 }
 
+void WebSockets::sendError(AsyncWebSocketClient* client, const char* message) {
+    DynamicJsonDocument respDoc(128);
+    respDoc["status"] = "error";
+    respDoc["message"] = message;
+    String respStr;
+    serializeJson(respDoc, respStr);
+    client->text(respStr);
+}
