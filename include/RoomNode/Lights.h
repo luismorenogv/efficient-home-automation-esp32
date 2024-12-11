@@ -67,10 +67,10 @@ private:
     const uint16_t PAUSE_MS = 8850;      // µs between repeats
     const uint8_t NUM_REPEATS = 5;
     const uint8_t MAX_FAILURES = 2;
-    const uint16_t LDR_MARGIN = 100;
+    const uint16_t LDR_MARGIN = 20;
     const uint16_t VERIFY_DELAY_MS = 1000;
     const uint16_t DARK_THRESHOLD = 2000;
-    const uint16_t BRIGHT_THRESHOLD = 3000;
+    const uint16_t BRIGHT_THRESHOLD = 4000;
 
     bool is_on; 
     uint8_t transmitter_pin;

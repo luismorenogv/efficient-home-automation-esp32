@@ -45,41 +45,38 @@ bool Lights::initializeState(uint8_t ldr_pin) {
     Serial.println("Initializing Lights state...");
     
     uint16_t initial_lux = readLDR(ldr_pin);
-    Serial.printf("Initial LDR: %u\n", initial_lux);
+    Serial.printf("Initial LDR: %u\r\n", initial_lux);
     
     sendSignal(Light, LightRepeat);
     delay(VERIFY_DELAY_MS);
     
     uint16_t new_lux = readLDR(ldr_pin);
-    Serial.printf("LDR after ON cmd: %u\n", new_lux);
+    Serial.printf("LDR after ON cmd: %u\r\n", new_lux);
+
+    Serial.println("Initializing lights OFF");
+    is_on = false;
     
     if (new_lux > initial_lux + LDR_MARGIN) {
-        is_on = true;
-        Serial.println("Lights are ON.");
+        sendSignal(Light, LightRepeat);
     } else if (new_lux < initial_lux - LDR_MARGIN) {
-        is_on = false;
-        Serial.println("Lights are OFF (unexpected).");
     } else {
         Serial.println("Unable to determine initial lights state.");
         return false;
     }
-
-    // Return lights to initial state
-    sendSignal(Light, LightRepeat);
     return true;
 }
 
 // Sends a command and verifies its effect using LDR readings
 bool Lights::sendCommand(Command command) {
-    Serial.printf("Sending cmd: %u\n", static_cast<uint8_t>(command));
+    Serial.printf("Sending cmd: %u\r\n", static_cast<uint8_t>(command));
     uint16_t initial_lux = readLDR(LDR_PIN);
-    Serial.printf("LDR before cmd: %u\n", initial_lux);
+    Serial.printf("LDR before cmd: %u\r\n", initial_lux);
     
     send(command);
     vTaskDelay(pdMS_TO_TICKS(VERIFY_DELAY_MS));
     
     uint16_t new_lux = readLDR(LDR_PIN);
-    Serial.printf("LDR after cmd: %u\n", new_lux);
+    Serial.printf("LDR after cmd: %u\r\n", new_lux);
 
     // Based on command, check if effect matches expectations
     bool expected_on = (command == Command::ON);
@@ -106,14 +103,14 @@ bool Lights::sendCommand(Command command) {
             Serial.println("Brightness up verified.");
             return true;
         }
-        Serial.println("Failed MORE_LIGHT.");
+        Serial.println("Failed to verify MORE_LIGHT.");
         return false;
     } else if (command == Command::LESS_LIGHT) {
         if (new_lux < initial_lux) {
             Serial.println("Brightness down verified.");
             return true;
         }
-        Serial.println("Failed LESS_LIGHT.");
+        Serial.println("Failed to verify LESS_LIGHT.");
         return false;
     } else if (command == Command::BLUE || command == Command::YELLOW) {
         // Color changes assumed successful
@@ -137,13 +134,15 @@ void Lights::setSchedule(Time w, Time c) {
     }
     warm = w;
     cold = c;
-    Serial.printf("Schedule: Warm %02u:%02u, Cold %02u:%02u\n", warm.hour, warm.min, cold.hour, cold.min);
+    Serial.printf("Schedule: Warm %02u:%02u, Cold %02u:%02u\r\n", warm.hour, warm.min, cold.hour, cold.min);
 }
 
 // Determines if current time falls into warm or cold mode
 bool Lights::determineMode(uint16_t current_minutes) const {
     uint16_t warm_minutes = warm.hour * 60 + warm.min;
     uint16_t cold_minutes = cold.hour * 60 + cold.min;
+
+    Serial.printf("determineMode function called with:\r\nwarm_minutes: %u\r\ncold_minutes: %u\r\ncurrent_minutes: %u\r\n", warm_minutes, cold_minutes, current_minutes);
 
     if (warm_minutes < cold_minutes) {
         return (current_minutes >= warm_minutes && current_minutes < cold_minutes);
@@ -155,16 +154,17 @@ bool Lights::determineMode(uint16_t current_minutes) const {
 // Initializes mode (warm/cold) based on current time and sends corresponding color command
 bool Lights::initializeMode(uint16_t current_minutes) {
     warm_mode = determineMode(current_minutes);
-    Serial.printf("Initial mode: %s\n", warm_mode ? "WARM" : "COLD");
+    Serial.printf("Initial mode: %s\r\n", warm_mode ? "WARM" : "COLD");
     return warm_mode ? sendCommand(Command::YELLOW) : sendCommand(Command::BLUE);
 }
 
 // Checks if mode changed and updates color if needed
 void Lights::checkAndUpdateMode(uint16_t current_minutes) {
     bool new_mode = determineMode(current_minutes);
+    Serial.printf("Current mode: %s\r\n", new_mode ? "WARM" : "COLD");
     if (new_mode != warm_mode) {
         warm_mode = new_mode;
-        Serial.printf("Mode changed to %s\n", warm_mode ? "WARM" : "COLD");
+        Serial.printf("Mode changed to %s\r\n", warm_mode ? "WARM" : "COLD");
         warm_mode ? sendCommand(Command::YELLOW) : sendCommand(Command::BLUE);
     }
 }
@@ -172,7 +172,7 @@ void Lights::checkAndUpdateMode(uint16_t current_minutes) {
 // Adjusts brightness to keep LDR within thresholds, sending MORE/LESS commands as needed
 void Lights::adjustBrightness(uint8_t ldr_pin) {
     uint16_t current_lux = readLDR(ldr_pin);
-    Serial.printf("Current LDR: %u\n", current_lux);
+    Serial.printf("Current LDR: %u\r\n", current_lux);
 
     if (current_lux < DARK_THRESHOLD) {
         Serial.println("Increasing brightness.");
