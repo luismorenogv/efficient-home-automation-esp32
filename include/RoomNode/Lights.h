@@ -63,6 +63,7 @@ public:
     void adjustBrightness(uint8_t ldr_pin);
 
 private:
+    const uint8_t MAX_INIT_RETRIES = 3;
     const uint16_t DIGIT_DURATION = 350; // µs per bit
     const uint16_t PAUSE_MS = 8850;      // µs between repeats
     const uint8_t NUM_REPEATS = 5;

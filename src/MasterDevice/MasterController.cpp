@@ -30,8 +30,8 @@ void MasterController::initialize() {
     // Initialize communication modules
     communications.initializeWifi();
     if (!communications.initializeESPNOW()) {
-        Serial.println("ESP-NOW initialization failed. Entering deep sleep.");
-        esp_deep_sleep_start();
+        LOG_ERROR("ESP-NOW initialization failed. Entering deep sleep.");
+        tryLater();
     }
     communications.setQueue(espnowQueue);
     
@@ -57,7 +57,7 @@ void MasterController::initialize() {
         1
     );
     if (result != pdPASS) {
-        Serial.println("Failed to create ESP-NOW Task");
+        LOG_ERROR("Failed to create ESP-NOW Task");
     }
 
     // Create Web Server Task
@@ -71,7 +71,7 @@ void MasterController::initialize() {
         0
     );
     if (result != pdPASS) {
-        Serial.println("Failed to create Web Server Task");
+        LOG_ERROR("Failed to create Web Server Task");
     }
 
     // Create NTP Sync Task
@@ -85,7 +85,7 @@ void MasterController::initialize() {
         1
     );
     if (result != pdPASS) {
-        Serial.println("Failed to create NTP Sync Task");
+        LOG_ERROR("Failed to create NTP Sync Task");
     }
 
     // Create Update Check Task
@@ -99,20 +99,20 @@ void MasterController::initialize() {
         1
     );
     if (result != pdPASS) {
-        Serial.println("Failed to create Update Check Task");
+        LOG_ERROR("Failed to create Update Check Task");
     }
 }
 
 void MasterController::sleepPeriodChangedCallback(uint8_t room_id, uint32_t new_sleep_period_ms) {
     if (masterControllerInstance) {
-        Serial.printf("Received new sleep period for room %u: %u ms\r\n", room_id, new_sleep_period_ms);
+        LOG_INFO("Received new sleep period for room %u: %u ms", room_id, new_sleep_period_ms);
         masterControllerInstance->dataManager.setNewSleepPeriod(room_id, new_sleep_period_ms);
     }
 }
 
 void MasterController::scheduleChangedCallback(uint8_t room_id, uint8_t warm_hour, uint8_t warm_min, uint8_t cold_hour, uint8_t cold_min) {
     if (masterControllerInstance) {
-        Serial.printf("Received new schedule for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", 
+        LOG_INFO("Received new schedule for room %u: Warm=%02u:%02u, Cold=%02u:%02u", 
                       room_id, warm_hour, warm_min, cold_hour, cold_min);
         masterControllerInstance->dataManager.setNewSchedule(room_id, warm_hour, warm_min, cold_hour, cold_min);
     }
@@ -149,16 +149,16 @@ void MasterController::espnowTask(void* pvParameter) {
                         uint8_t sensor_mac[MAC_ADDRESS_LENGTH];
                         if (self->dataManager.getMacAddr(room_id, NodeType::SENSOR, sensor_mac)) {
                             self->communications.sendMsg(sensor_mac, reinterpret_cast<uint8_t*>(&new_period_msg), sizeof(NewSleepPeriodMsg));
-                            Serial.printf("Sent NEW_SLEEP_PERIOD to sensor in room %u successfully\r\n", room_id);
+                            LOG_INFO("Sent NEW_SLEEP_PERIOD to sensor in room %u successfully", room_id);
                             
                             // Update retry mechanism
                             self->pendingSleepUpdate[room_id].attempts++;
                             self->pendingSleepUpdate[room_id].lastAttemptMillis = millis();
                             if (self->pendingSleepUpdate[room_id].attempts > MAX_RETRIES){
-                                Serial.printf("Communication with sensorNode with ID %u isn't working correctly.\r\n", room_id);
+                                LOG_WARNING("Communication with sensorNode with ID %u isn't working as expected.", room_id);
                             }
                         } else {
-                            Serial.printf("Failed to retrieve MAC address for room %u. Cannot send NEW_SLEEP_PERIOD.\r\n", room_id);
+                            LOG_ERROR("Failed to retrieve MAC address for room %u. Cannot send NEW_SLEEP_PERIOD.", room_id);
                         }
                     } else {
                         // Acknowledge TEMP_HUMID message
@@ -174,7 +174,7 @@ void MasterController::espnowTask(void* pvParameter) {
                     
                     self->dataManager.sensorSetup(room_id, msg.mac_addr, sleep_period_ms);
 
-                    Serial.printf("Received JOIN_SENSOR from room %u with sleep_period %u ms\r\n", room_id, sleep_period_ms);
+                    LOG_INFO("Received JOIN_SENSOR from room %u with sleep_period %u ms", room_id, sleep_period_ms);
                     self->communications.registerPeer(msg.mac_addr, WiFi.channel());
                     self->communications.sendAck(msg.mac_addr, msg_type);
                 }
@@ -182,7 +182,7 @@ void MasterController::espnowTask(void* pvParameter) {
 
                 case MessageType::ACK: {
                     if (msg.len < sizeof(AckMsg)) {
-                        Serial.println("Received malformed ACK message.");
+                        LOG_WARNING("Received malformed ACK message.");
                         break;
                     }
                     AckMsg* payload = reinterpret_cast<AckMsg*>(msg.data);
@@ -192,21 +192,21 @@ void MasterController::espnowTask(void* pvParameter) {
                         if (room_id != ID_NOT_VALID) {
                             self->dataManager.sleepPeriodWasUpdated(room_id);
                             self->pendingSleepUpdate[room_id].attempts = 0;
-                            Serial.printf("Received ACK for NEW_SLEEP_PERIOD from room %u\r\n", room_id);
+                            LOG_INFO("Received ACK for NEW_SLEEP_PERIOD from room %u", room_id);
                         } else {
-                            Serial.println("Received ACK for NEW_SLEEP_PERIOD from unknown SensorNode.");
+                            LOG_WARNING("Received ACK for NEW_SLEEP_PERIOD from unknown SensorNode.");
                         }
                     } else if (payload->acked_msg == MessageType::NEW_SCHEDULE) {
                         uint8_t room_id = self->dataManager.getId(msg.mac_addr);
                         if (room_id != ID_NOT_VALID) {
                             self->dataManager.scheduleWasUpdated(room_id);
                             self->pendingScheduleUpdate[room_id].attempts = 0;
-                            Serial.printf("Received ACK for NEW_SCHEDULE from room %u\r\n", room_id);
+                            LOG_INFO("Received ACK for NEW_SCHEDULE from room %u", room_id);
                         } else {
-                            Serial.println("Received ACK for NEW_SCHEDULE from unknown RoomNode.");
+                            LOG_WARNING("Received ACK for NEW_SCHEDULE from unknown RoomNode.");
                         }
                     } else {
-                        Serial.printf("Received ACK for unknown MessageType: %d\r\n", payload->acked_msg);
+                        LOG_WARNING("Received ACK for unknown MessageType: %d", payload->acked_msg);
                     }
                 }
                 break;
@@ -222,7 +222,7 @@ void MasterController::espnowTask(void* pvParameter) {
                     self->communications.registerPeer(msg.mac_addr, WiFi.channel());
                     self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
                     
-                    Serial.printf("Received JOIN_ROOM from room %u with warm/cold times\r\n", room_id);
+                    LOG_INFO("Received JOIN_ROOM from room %u with warm/cold times", room_id);
 
                     // Update Web Interface
                     self->webSockets.sendDataUpdate(room_id);
@@ -230,7 +230,7 @@ void MasterController::espnowTask(void* pvParameter) {
                 break;
 
                 default:
-                    Serial.printf("Received unknown message type: %d\r\n", msg_type);
+                    LOG_WARNING("Received unknown message type: %d", msg_type);
             }
         }
     }
@@ -249,7 +249,7 @@ void MasterController::ntpSyncTask(void* pvParameter) {
     MasterController* self = static_cast<MasterController*>(pvParameter);
     while(true) {
         vTaskDelay(pdMS_TO_TICKS(NTPSYNC_PERIOD));
-        Serial.println("Re-synchronizing NTP time...");
+        LOG_INFO("Re-synchronizing NTP time...");
         self->ntpClient.initialize();
     }
 }
@@ -267,27 +267,32 @@ void MasterController::checkAndResendUpdates() {
         // Handle schedule updates
         if (dataManager.isPendingUpdate(i, NodeType::ROOM)) {
             uint32_t nowMs = millis();
-            if (pendingScheduleUpdate[i].attempts < MAX_RETRIES && 
-                (nowMs - pendingScheduleUpdate[i].lastAttemptMillis > RETRY_INTERVAL_MS)) {
-                
-                RoomData rd = dataManager.getRoomData(i);
-                uint8_t room_mac[MAC_ADDRESS_LENGTH];
-                if (dataManager.getMacAddr(i, NodeType::ROOM, room_mac)) {
-                    NewScheduleMsg scheduleMsg;
-                    scheduleMsg.type = MessageType::NEW_SCHEDULE;
-                    scheduleMsg.warm = rd.control.warm;
-                    scheduleMsg.cold = rd.control.cold;
+            if ((nowMs - pendingScheduleUpdate[i].lastAttemptMillis > RETRY_INTERVAL_MS)){
+                if (pendingScheduleUpdate[i].attempts < MAX_RETRIES){
+                    RoomData rd = dataManager.getRoomData(i);
+                    uint8_t room_mac[MAC_ADDRESS_LENGTH];
+                    if (dataManager.getMacAddr(i, NodeType::ROOM, room_mac)) {
+                        NewScheduleMsg scheduleMsg;
+                        scheduleMsg.type = MessageType::NEW_SCHEDULE;
+                        scheduleMsg.warm = rd.control.warm;
+                        scheduleMsg.cold = rd.control.cold;
 
-                    communications.sendMsg(room_mac, reinterpret_cast<uint8_t*>(&scheduleMsg), sizeof(scheduleMsg));
-                    Serial.printf("Resent NEW_SCHEDULE to room %u (attempt %u)\r\n", 
-                                  i, pendingScheduleUpdate[i].attempts + 1);
-                    pendingScheduleUpdate[i].attempts++;
-                    pendingScheduleUpdate[i].lastAttemptMillis = nowMs;
+                        communications.sendMsg(room_mac, reinterpret_cast<uint8_t*>(&scheduleMsg), sizeof(scheduleMsg));
+                        LOG_INFO("Resent NEW_SCHEDULE to room %u (attempt %u)", 
+                                    i, pendingScheduleUpdate[i].attempts + 1);
+                        pendingScheduleUpdate[i].attempts++;
+                        pendingScheduleUpdate[i].lastAttemptMillis = nowMs;
+                    }
+                } else {
+                    LOG_ERROR("RoomNode with ID %u is not responding to new schedule update", i);
+                    pendingScheduleUpdate[i].attempts = 0;
                 }
             }
-        } else {
-            // Reset attempts if no longer pending
-            pendingScheduleUpdate[i].attempts = 0;
         }
     }
+}
+
+void MasterController::tryLater(){
+    esp_sleep_enable_timer_wakeup(30*60*1000000);
+    esp_deep_sleep_start();
 }

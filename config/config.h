@@ -1,11 +1,15 @@
 /**
  * @file config.h
- * @brief Configuration constants for MasterDevice and SensorNode
+ * @brief Configuration constants for MasterDevice, RoomNodes and sensorNodes
  * 
  * @author Luis Moreno
  * @date Nov 25, 2024
  */
 #pragma once
+
+#define ENABLE_LOGGING 1  // Set to 0 to disable all logs
+
+#include "Logger.h"
 #include <Arduino.h>
 #include "Common/mac_addrs.h"
 
@@ -25,7 +29,7 @@ constexpr const char* ROOM_NAME[NUM_ROOMS] = {"Room Luis", "Room Pablo", "Room A
 constexpr uint8_t MAX_PEERS = 10;                            // Maximum number of peers
 
 constexpr const uint32_t WEB_SERVER_PERIOD = 500;             // Web server update period in ms
-constexpr const uint32_t NTPSYNC_PERIOD = 10 * 60 * 1000000;  // NTP synchronization period (10 minutes)
+constexpr const uint32_t NTPSYNC_PERIOD = 5 * 60 * 1000000;  // NTP synchronization period (10 minutes)
 constexpr const uint32_t CHECK_PENDING_MSG_PERIOD = 1000;     // Period to check pending messages in ms
 #endif
 
@@ -45,7 +49,7 @@ constexpr uint8_t MAX_PEERS = 1;                     // Maximum number of peers
  *                      Room Node                             *
  *************************************************************/
 #ifdef MODE_ROOM
-constexpr uint8_t ROOM_ID = 1;                       // Identifier for the room (Unique for each RoomNode)
+constexpr uint8_t ROOM_ID = 0;                       // Identifier for the room (Unique for each RoomNode)
 
 constexpr uint8_t LD2410_PIN = 14;                   // GPIO pin for LD2410 sensor
 constexpr uint8_t MAXIMUM_MOVING_DISTANCE_GATE = 8;  // Maximum moving distance for gate activation
@@ -63,7 +67,7 @@ constexpr uint8_t DEFAULT_HOUR_WARM = 19;            // Default hour for warm mo
 constexpr uint8_t DEFAULT_MIN_WARM = 0;              // Default minute for warm mode activation
 
 constexpr uint32_t LIGHTS_CONTROL_PERIOD = 1000;      // Lights control update period in ms
-constexpr uint32_t NTPSYNC_PERIOD = 30 * 60 * 1000000; // NTP synchronization period (30 minutes)
+constexpr uint32_t NTPSYNC_PERIOD = 5 * 60 * 1000000; // NTP synchronization period (30 minutes)
 
 constexpr uint8_t LDR_PIN = 33;                        // GPIO pin for Light Dependent Resistor
 constexpr uint8_t IR_LED_PIN = 15;                    // GPIO pin for IR LED

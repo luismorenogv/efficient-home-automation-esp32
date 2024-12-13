@@ -88,7 +88,7 @@ bool DataManager::getMacAddr(uint8_t room_id, NodeType node_type, uint8_t* out_m
         if (node_type == NodeType::SENSOR){
             xSemaphoreTake(sensorMutex, portMAX_DELAY);
                 if (!rooms[room_id].sensor.registered){
-                    Serial.println("Sensor MAC address is not registered.");
+                    LOG_WARNING("Sensor MAC address is not registered.");
                     xSemaphoreGive(sensorMutex);
                     return false;
                 }
@@ -97,7 +97,7 @@ bool DataManager::getMacAddr(uint8_t room_id, NodeType node_type, uint8_t* out_m
         } else {
             xSemaphoreTake(controlMutex, portMAX_DELAY);
                 if (!rooms[room_id].control.registered){
-                    Serial.println("Control MAC address is not registered.");
+                    LOG_WARNING("Control MAC address is not registered.");
                     xSemaphoreGive(controlMutex);
                     return false;
                 }
@@ -106,7 +106,7 @@ bool DataManager::getMacAddr(uint8_t room_id, NodeType node_type, uint8_t* out_m
         }
         return true;
     }
-    Serial.println("Invalid room_id or out_mac_addr is nullptr");
+    LOG_WARNING("Invalid room_id or out_mac_addr is nullptr");
     return false;
 }
 
@@ -139,7 +139,7 @@ void DataManager::scheduleWasUpdated(uint8_t room_id) {
         xSemaphoreTake(controlMutex, portMAX_DELAY);
             rooms[room_id].control.pending_update = false;
         xSemaphoreGive(controlMutex);
-        Serial.println("Schedule was successfully updated");
+        LOG_INFO("Schedule was successfully updated");
     }
 }
 
@@ -149,13 +149,13 @@ void DataManager::sleepPeriodWasUpdated(uint8_t room_id){
             rooms[room_id].sensor.sleep_period_ms = rooms[room_id].sensor.new_sleep_period_ms;
             rooms[room_id].sensor.pending_update = false;
         xSemaphoreGive(sensorMutex);
-        Serial.println("Sleep Period was successfully updated");
+        LOG_INFO("Sleep Period was successfully updated");
     }
 }
 
 bool DataManager::roomIdIsValid(uint8_t room_id) const {
     if (room_id >= NUM_ROOMS){
-        Serial.println("The Room ID is not valid.");
+        LOG_WARNING("The Room ID is not valid.");
         return false;
     }
     return true;
@@ -184,7 +184,7 @@ uint8_t DataManager::getId(uint8_t* mac_addr) const {
         }
     xSemaphoreGive(sensorMutex);
     xSemaphoreGive(controlMutex);
-    Serial.println("MAC address is not registered.");
+    LOG_WARNING("MAC address is not registered.");
     return ID_NOT_VALID;
 }
 
@@ -200,6 +200,6 @@ void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, uint8_t
             rooms[room_id].control.pending_update = false; // No pending update initially
         xSemaphoreGive(controlMutex);
 
-        Serial.printf("Control setup for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", room_id, warm_hour, warm_min, cold_hour, cold_min);
+        LOG_INFO("Control setup for room %u: Warm=%02u:%02u, Cold=%02u:%02u", room_id, warm_hour, warm_min, cold_hour, cold_min);
     }
 }

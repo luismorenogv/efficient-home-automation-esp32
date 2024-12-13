@@ -27,12 +27,12 @@ void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg) {
         if (acked_msg == last_acked_msg) {
             ack_received = true;
             xSemaphoreGive(ackSemaphore);
-            Serial.println("ACK received from master");
+            LOG_INFO("ACK received from master");
         } else {
-            Serial.println("ACK for incorrect message type.");
+            LOG_WARNING("ACK for incorrect message type.");
         }
     } else {
-        Serial.println("ACK from invalid MAC address");
+        LOG_WARNING("ACK from invalid MAC address");
     }
 }
 
@@ -41,13 +41,12 @@ void RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
     if (numPeers > 0) {
         CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
     } else {
-        Serial.println("No peers registered.");
+        LOG_WARNING("No peers registered.");
     }
 }
 
 // Handles received data by enqueuing it for processing
 void RoomCommunications::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) {
-    Serial.println("Message received");
     // Enqueue the message for processing in the FreeRTOS task
     IncomingMsg incoming_msg;
     memcpy(incoming_msg.mac_addr, mac_addr, MAC_ADDRESS_LENGTH);

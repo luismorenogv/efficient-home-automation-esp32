@@ -6,7 +6,9 @@
  * @date Dec 8, 2024
  */
 #pragma once
+
 #include <Arduino.h>
+#include "config.h"
 
 class PowerManager {
 public:

@@ -212,11 +212,15 @@ function updateSensorData(data) {
 
         // Add sleep period dropdown
         const sleepLabel = document.createElement('label');
+        sleepLabel.id = `sleep-label-${data.room_id}`;
         sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
         sleepLabel.textContent = `Sleep Period: `;
+        sleepLabel.style.display = 'none';
         roomDiv.appendChild(sleepLabel);
 
         const sleepSelect = document.createElement('select');
+        sleepSelect.id = `sleep-${data.room_id}`;
+        sleepSelect.style.display = 'none';
 
         sleepSelect.id = `sleep-${data.room_id}`;
         const options = [
@@ -264,6 +268,15 @@ function updateSensorData(data) {
     if (historyButton) {
         if (data.registered) {
             historyButton.style.display = 'inline-block';
+
+            const sleepLabel = document.getElementById(`sleep-label-${data.room_id}`);
+            const sleepSelect = document.getElementById(`sleep-${data.room_id}`);
+            if (sleepLabel) {
+                sleepLabel.style.display = 'inline-block';
+            }
+            if (sleepSelect) {
+                sleepSelect.style.display = 'inline-block';
+            }
         } else {
             console.log(`Room ${data.room_id} is not registered or data value is undefined.`);
         }

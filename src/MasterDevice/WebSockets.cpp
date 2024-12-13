@@ -35,7 +35,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
                          void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client %u connected\r\n", client->id());
+            LOG_INFO("WebSocket client %u connected", client->id());
 
             // Send current sensor data for all registered rooms upon client connection
             for (uint8_t i = 0; i < NUM_ROOMS; i++) {
@@ -47,7 +47,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
             break;
 
         case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client %u disconnected\r\n", client->id());
+            LOG_INFO("WebSocket client %u disconnected", client->id());
             break;
 
         case WS_EVT_DATA:
@@ -56,19 +56,19 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
                 // Ensure the message is final, not fragmented, and is text-based
                 if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
                     String msg = String((char*)data).substring(0, len);
-                    Serial.printf("Received message from client %u: %s\r\n", client->id(), msg.c_str());
+                    LOG_INFO("Received message from client %u: %s", client->id(), msg.c_str());
 
                     DynamicJsonDocument doc(128);
                     DeserializationError error = deserializeJson(doc, msg);
                     if (error) {
-                        Serial.println("Failed to parse JSON message from client.");
+                        LOG_ERROR("Failed to parse JSON message from client.");
                         sendError(client, "Invalid JSON format");
                         return;
                     }
 
                     JsonObject root = doc.as<JsonObject>();
                     if (!root.containsKey("action")) {
-                        Serial.println("JSON message missing 'action' field.");
+                        LOG_ERROR("JSON message missing 'action' field.");
                         sendError(client, "Missing 'action' field'");
                         return;
                     }
@@ -94,7 +94,7 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
 
 void WebSockets::handleSetSleepPeriod(AsyncWebSocketClient* client, JsonObject& root) {
     if (!root.containsKey("room_id") || !root.containsKey("sleep_period")) {
-        Serial.println("setSleepPeriod action missing required fields.");
+        LOG_ERROR("setSleepPeriod action missing required fields.");
         sendError(client, "Missing 'room_id' or 'sleep_period'");
         return;
     }
@@ -116,17 +116,17 @@ void WebSockets::handleSetSleepPeriod(AsyncWebSocketClient* client, JsonObject& 
     } else if (periodStr == "6h") {
         period_ms = 6 * 60 * 60 * 1000;
     } else {
-        Serial.println("Unknown sleep period received");
+        LOG_ERROR("Unknown sleep period received");
         sendError(client, "Unknown sleep period");
         return;
     }
 
-    Serial.printf("Setting sleep period for room %u to %u ms\r\n", room_id, period_ms);
+    LOG_INFO("Setting sleep period for room %u to %u ms", room_id, period_ms);
 
     if (sleepDurationCallback) {
         sleepDurationCallback(room_id, period_ms);
     } else {
-        Serial.println("No callback defined");
+        LOG_ERROR("No callback defined");
         return;
     }
 
@@ -142,19 +142,19 @@ void WebSockets::handleSetSleepPeriod(AsyncWebSocketClient* client, JsonObject& 
 
 void WebSockets::handleGetHistory(AsyncWebSocketClient* client, JsonObject& root) {
     if (!root.containsKey("room_id")) {
-        Serial.println("getHistory action missing 'room_id' field.");
+        LOG_ERROR("getHistory action missing 'room_id' field.");
         sendError(client, "Missing 'room_id' field");
         return;
     }
 
     uint8_t room_id = root["room_id"];
-    Serial.printf("Received getHistory request for room %u\r\n", room_id);
+    LOG_INFO("Received getHistory request for room %u", room_id);
     sendHistoryData(client, room_id);
 }
 
 void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& root) {
     if (!root.containsKey("room_id") || !root.containsKey("warm_time") || !root.containsKey("cold_time")) {
-        Serial.println("setSchedule action missing required fields.");
+        LOG_ERROR("setSchedule action missing required fields.");
         DynamicJsonDocument respDoc(128);
         sendError(client, "Missing 'room_id', 'warm_time', or 'cold_time'");
         return;
@@ -167,7 +167,7 @@ void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& roo
     uint8_t warmHour, warmMin, coldHour, coldMin;
     if (sscanf(warmVal.c_str(), "%hhu:%hhu", &warmHour, &warmMin) != 2 ||
         sscanf(coldVal.c_str(), "%hhu:%hhu", &coldHour, &coldMin) != 2) {
-        Serial.println("Invalid time format received.");
+        LOG_ERROR("Invalid time format received.");
         sendError(client, "Invalid time format, use HH:MM");
         return;
     }
@@ -175,7 +175,7 @@ void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& roo
     // Check if roomNode is registered
     RoomData roomData = dataManager.getRoomData(room_id);
     if (!roomData.control.registered) {
-        Serial.println("RoomNode not registered, cannot set schedule.");
+        LOG_ERROR("RoomNode not registered, cannot set schedule.");
         sendError(client, "RoomNode not registered");
         return;
     }
@@ -183,7 +183,7 @@ void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& roo
     if (scheduleCallback) {
         scheduleCallback(room_id, warmHour, warmMin, coldHour, coldMin);
     } else{
-        Serial.println("No callback defined");
+        LOG_ERROR("No callback defined");
         return;
     }
 
@@ -197,7 +197,7 @@ void WebSockets::handleSetSchedule(AsyncWebSocketClient* client, JsonObject& roo
     serializeJson(respDoc, respStr);
     client->text(respStr);
 
-    Serial.printf("Requested NEW_SCHEDULE for room %u: Warm=%02u:%02u, Cold=%02u:%02u\r\n", room_id, warmHour, warmMin, coldHour, coldMin);
+    LOG_INFO("Requested NEW_SCHEDULE for room %u: Warm=%02u:%02u, Cold=%02u:%02u", room_id, warmHour, warmMin, coldHour, coldMin);
 }
 
 
@@ -249,7 +249,7 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
     serializeJson(doc, jsonString);
     ws.textAll(jsonString);
 
-    Serial.printf("Sent data update via WebSocket for room %u\r\n", room_id);
+    LOG_INFO("Sent data update via WebSocket for room %u", room_id);
 }
 
 
@@ -294,7 +294,7 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     serializeJson(doc, jsonString);
 
     client->text(jsonString);
-    Serial.printf("Sent history data to client %u for room %u\r\n", client->id(), room_id);
+    LOG_INFO("Sent history data to client %u for room %u", client->id(), room_id);
 }
 
 void WebSockets::sendError(AsyncWebSocketClient* client, const char* message) {

@@ -19,7 +19,7 @@ SensorNode::SensorNode(const uint8_t room_id, uint32_t* sleep_duration, uint8_t*
 bool SensorNode::initialize() {
     Serial.begin(115200);
     if (!sht31Sensor.initialize()) {
-        Serial.println("SHT31 initialization failed");
+        LOG_ERROR("SHT31 initialization failed");
         return false;
     }
     // Initialize ESP-NOW; if not first cycle, peer registration occurs after join
@@ -47,16 +47,16 @@ bool SensorNode::joinNetwork() {
                 ack_received = true;
             } else {
                 retries++;
-                Serial.printf("No ACK, retrying (%u/%u)\r\n", retries, MAX_RETRIES);
+                LOG_WARNING("No ACK, retrying (%u/%u)", retries, MAX_RETRIES);
             }
         }
 
         if (ack_received) {
-            Serial.printf("Master found on channel %u\r\n", channel);
+            LOG_INFO("Master found on channel %u", channel);
             *channel_wifi = channel;
             return true;
         }
-        Serial.printf("No ACK on channel %u, trying next.\r\n", channel);
+        LOG_INFO("No ACK on channel %u, trying next.", channel);
         espNowHandler.unregisterPeer((uint8_t*)master_mac_addr);
     }
     return false;
@@ -68,9 +68,9 @@ void SensorNode::run() {
     espNowHandler.registerPeer((uint8_t*)master_mac_addr, *channel_wifi);
 
     if (!sht31Sensor.readSensorData(temperature, humidity)) {
-        Serial.println("Failed to read SHT31!");
+        LOG_WARNING("Failed to read SHT31!");
     } else {
-        Serial.printf("Sensor data: Temp=%.2f°C, Hum=%.2f%%\r\n", temperature, humidity);
+        LOG_INFO("Sensor data: Temp=%.2f°C, Hum=%.2f%%", temperature, humidity);
         TempHumidMsg msg;
         msg.room_id = room_id;
         msg.temperature = temperature;
@@ -84,12 +84,12 @@ void SensorNode::run() {
                 ack_received = true;
             } else {
                 retries++;
-                Serial.printf("No ACK for TEMP_HUMID, retry (%u/%u)\r\n", retries, MAX_RETRIES);
+                LOG_WARNING("No ACK for TEMP_HUMID, retry (%u/%u)", retries, MAX_RETRIES);
             }
         }
 
         if (!ack_received) {
-            Serial.println("No ACK after max retries for sensor data");
+            LOG_ERROR("No ACK after max retries for sensor data");
         }
     }
 }

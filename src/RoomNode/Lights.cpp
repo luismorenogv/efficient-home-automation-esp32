@@ -42,41 +42,44 @@ uint16_t Lights::readLDR(uint8_t ldr_pin) {
 
 // Attempts to determine initial lights state by comparing LDR before/after ON signal
 bool Lights::initializeState(uint8_t ldr_pin) {
-    Serial.println("Initializing Lights state...");
-    
-    uint16_t initial_lux = readLDR(ldr_pin);
-    Serial.printf("Initial LDR: %u\r\n", initial_lux);
-    
-    sendSignal(Light, LightRepeat);
-    delay(VERIFY_DELAY_MS);
-    
-    uint16_t new_lux = readLDR(ldr_pin);
-    Serial.printf("LDR after ON cmd: %u\r\n", new_lux);
-
-    Serial.println("Initializing lights OFF");
-    is_on = false;
-    
-    if (new_lux > initial_lux + LDR_MARGIN) {
+    LOG_INFO("Initializing Lights state...");
+    for(uint8_t i = 0; i < MAX_INIT_RETRIES; i++){
+        uint16_t initial_lux = readLDR(ldr_pin);
+        LOG_INFO("Initial LDR: %u", initial_lux);
+        
         sendSignal(Light, LightRepeat);
-    } else if (new_lux < initial_lux - LDR_MARGIN) {
-    } else {
-        Serial.println("Unable to determine initial lights state.");
-        return false;
+        delay(VERIFY_DELAY_MS);
+        
+        uint16_t new_lux = readLDR(ldr_pin);
+        LOG_INFO("LDR after ON cmd: %u", new_lux);
+
+        LOG_INFO("Initializing lights OFF");
+        is_on = false;
+        
+        if (new_lux > initial_lux + LDR_MARGIN) {
+            sendSignal(Light, LightRepeat);
+        } else if (new_lux < initial_lux - LDR_MARGIN) {
+        } else {
+            LOG_WARNING("Unable to determine initial lights state in attempt %u", i);
+            continue;
+        }
+        return true;
     }
-    return true;
+    LOG_ERROR("Lights initialization failed");
+    return false;
 }
 
 // Sends a command and verifies its effect using LDR readings
 bool Lights::sendCommand(Command command) {
-    Serial.printf("Sending cmd: %u\r\n", static_cast<uint8_t>(command));
+    LOG_INFO("Sending cmd: %u", static_cast<uint8_t>(command));
     uint16_t initial_lux = readLDR(LDR_PIN);
-    Serial.printf("LDR before cmd: %u\r\n", initial_lux);
+    LOG_INFO("LDR before cmd: %u", initial_lux);
     
     send(command);
     vTaskDelay(pdMS_TO_TICKS(VERIFY_DELAY_MS));
     
     uint16_t new_lux = readLDR(LDR_PIN);
-    Serial.printf("LDR after cmd: %u\r\n", new_lux);
+    LOG_INFO("LDR after cmd: %u", new_lux);
 
     // Based on command, check if effect matches expectations
     bool expected_on = (command == Command::ON);
@@ -85,40 +88,40 @@ bool Lights::sendCommand(Command command) {
     if (expected_on) {
         if (new_lux > initial_lux + LDR_MARGIN) {
             is_on = true;
-            Serial.println("ON verified.");
+            LOG_INFO("ON verified.");
             return true;
         }
-        Serial.println("Failed to verify ON.");
+        LOG_WARNING("Failed to verify ON.");
         return false;
     } else if (expected_off) {
         if (new_lux < initial_lux - LDR_MARGIN) {
             is_on = false;
-            Serial.println("OFF verified.");
+            LOG_INFO("OFF verified.");
             return true;
         }
-        Serial.println("Failed to verify OFF.");
+        LOG_WARNING("Failed to verify OFF.");
         return false;
     } else if (command == Command::MORE_LIGHT) {
         if (new_lux > initial_lux) {
-            Serial.println("Brightness up verified.");
+            LOG_INFO("Brightness up verified.");
             return true;
         }
-        Serial.println("Failed to verify MORE_LIGHT.");
+        LOG_WARNING("Failed to verify MORE_LIGHT.");
         return false;
     } else if (command == Command::LESS_LIGHT) {
         if (new_lux < initial_lux) {
-            Serial.println("Brightness down verified.");
+            LOG_INFO("Brightness down verified.");
             return true;
         }
-        Serial.println("Failed to verify LESS_LIGHT.");
+        LOG_WARNING("Failed to verify LESS_LIGHT.");
         return false;
     } else if (command == Command::BLUE || command == Command::YELLOW) {
         // Color changes assumed successful
-        Serial.println("Color change command sent.");
+        LOG_INFO("Color change command sent.");
         return true;
     }
 
-    Serial.println("Unknown command verification failed.");
+    LOG_WARNING("Unknown command verification failed.");
     return false;
 }
 
@@ -129,12 +132,12 @@ bool Lights::isOn() const {
 // Sets a new warm/cold schedule, ensuring they differ
 void Lights::setSchedule(Time w, Time c) {
     if (w.hour == c.hour && w.min == c.min) {
-        Serial.println("Invalid schedule: warm/cold times identical.");
+        LOG_WARNING("Invalid schedule: warm/cold times identical.");
         return;
     }
     warm = w;
     cold = c;
-    Serial.printf("Schedule: Warm %02u:%02u, Cold %02u:%02u\r\n", warm.hour, warm.min, cold.hour, cold.min);
+    LOG_INFO("Schedule: Warm %02u:%02u, Cold %02u:%02u", warm.hour, warm.min, cold.hour, cold.min);
 }
 
 // Determines if current time falls into warm or cold mode
@@ -142,7 +145,7 @@ bool Lights::determineMode(uint16_t current_minutes) const {
     uint16_t warm_minutes = warm.hour * 60 + warm.min;
     uint16_t cold_minutes = cold.hour * 60 + cold.min;
 
-    Serial.printf("determineMode function called with:\r\nwarm_minutes: %u\r\ncold_minutes: %u\r\ncurrent_minutes: %u\r\n", warm_minutes, cold_minutes, current_minutes);
+    LOG_INFO("determineMode function called with:\r\nwarm_minutes: %u\r\ncold_minutes: %u\r\ncurrent_minutes: %u", warm_minutes, cold_minutes, current_minutes);
 
     if (warm_minutes < cold_minutes) {
         return (current_minutes >= warm_minutes && current_minutes < cold_minutes);
@@ -154,17 +157,17 @@ bool Lights::determineMode(uint16_t current_minutes) const {
 // Initializes mode (warm/cold) based on current time and sends corresponding color command
 bool Lights::initializeMode(uint16_t current_minutes) {
     warm_mode = determineMode(current_minutes);
-    Serial.printf("Initial mode: %s\r\n", warm_mode ? "WARM" : "COLD");
+    LOG_INFO("Initial mode: %s", warm_mode ? "WARM" : "COLD");
     return warm_mode ? sendCommand(Command::YELLOW) : sendCommand(Command::BLUE);
 }
 
 // Checks if mode changed and updates color if needed
 void Lights::checkAndUpdateMode(uint16_t current_minutes) {
     bool new_mode = determineMode(current_minutes);
-    Serial.printf("Current mode: %s\r\n", new_mode ? "WARM" : "COLD");
+    LOG_INFO("Current mode: %s", new_mode ? "WARM" : "COLD");
     if (new_mode != warm_mode) {
         warm_mode = new_mode;
-        Serial.printf("Mode changed to %s\r\n", warm_mode ? "WARM" : "COLD");
+        LOG_INFO("Mode changed to %s", warm_mode ? "WARM" : "COLD");
         warm_mode ? sendCommand(Command::YELLOW) : sendCommand(Command::BLUE);
     }
 }
@@ -172,28 +175,28 @@ void Lights::checkAndUpdateMode(uint16_t current_minutes) {
 // Adjusts brightness to keep LDR within thresholds, sending MORE/LESS commands as needed
 void Lights::adjustBrightness(uint8_t ldr_pin) {
     uint16_t current_lux = readLDR(ldr_pin);
-    Serial.printf("Current LDR: %u\r\n", current_lux);
+    LOG_INFO("Current LDR: %u", current_lux);
 
     if (current_lux < DARK_THRESHOLD) {
-        Serial.println("Increasing brightness.");
+        LOG_INFO("Increasing brightness.");
         uint8_t failures = 0;
         while(readLDR(ldr_pin) < DARK_THRESHOLD) {
             if (!sendCommand(Command::MORE_LIGHT)) {
                 failures++;
                 if (failures >= MAX_FAILURES) {
-                    Serial.println("Max brightness reached.");
+                    LOG_INFO("Max brightness reached.");
                     break;
                 }
             }
         }
     } else if (current_lux > BRIGHT_THRESHOLD) {
-        Serial.println("Decreasing brightness.");
+        LOG_INFO("Decreasing brightness.");
         uint8_t failures = 0;
         while(readLDR(ldr_pin) > BRIGHT_THRESHOLD) {
             if (!sendCommand(Command::LESS_LIGHT)) {
                 failures++;
                 if (failures >= MAX_FAILURES) {
-                    Serial.println("Min brightness reached.");
+                    LOG_INFO("Min brightness reached.");
                     break;
                 }
             }
@@ -221,7 +224,7 @@ void Lights::send(Command command) {
             sendSignal(Yellow, YellowRepeat);
             break;
         default:
-            Serial.println("Unknown command");
+            LOG_WARNING("Unknown command");
             break;
     }
 }

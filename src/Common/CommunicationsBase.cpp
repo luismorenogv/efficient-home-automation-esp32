@@ -42,21 +42,17 @@ void CommunicationsBase::initializeWifi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     WiFi.setSleep(false);
 
-    Serial.print("Connecting to Wi-Fi");
+    LOG_INFO("Connecting to Wi-Fi");
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
-        Serial.print(".");
+        #ifdef ENABLE_LOGGING
+            Serial.print(".");
+        #endif
     }
-    Serial.println("\r\nWi-Fi connected");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-
-    Serial.print("Device MAC Address: ");
-    Serial.println(WiFi.macAddress());
-
-    uint8_t wifi_channel = WiFi.channel();
-    Serial.print("Wi-Fi Channel: ");
-    Serial.println(wifi_channel);
+    LOG_INFO("Wi-Fi connected");
+    LOG_INFO("IP Address: %s", WiFi.localIP().toString().c_str());
+    LOG_INFO("MAC Address: %s", WiFi.macAddress().c_str());
+    LOG_INFO("Wi-Fi Channel: %u", WiFi.channel());
 }
 
 // Initializes ESP-NOW and registers the receive callback
@@ -68,32 +64,34 @@ bool CommunicationsBase::initializeESPNOW() {
             success = true;
             break;
         }
-        Serial.println("Retrying ESP-NOW initialization...");
+        LOG_INFO("Retrying ESP-NOW initialization...");
         delay(1000);
     }
 
     if (!success) {
-        Serial.println("Failed to initialize ESP-NOW after multiple attempts.");
+        LOG_ERROR("Failed to initialize ESP-NOW after multiple attempts.");
         return false;
     }
 
     // Register receive callback
     esp_now_register_recv_cb(CommunicationsBase::onDataRecvStatic);
 
-    Serial.println("ESP-NOW initialized");
+    LOG_INFO("ESP-NOW initialized");
     return true;
 }
 
 // Registers a new peer device
 bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel) {
+    esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE); // Set WiFi channel of device accordingly
+    
     // Lock the mutex to protect peer list
     if (xSemaphoreTake(peerMutex, portMAX_DELAY) != pdTRUE) {
-        Serial.println("Failed to take peer mutex.");
+        LOG_WARNING("Failed to take peer mutex.");
         return false;
     }
 
     if (numPeers >= MAX_PEERS) {
-        Serial.println("Maximum number of peers reached.");
+        LOG_INFO("Maximum number of peers reached.");
         xSemaphoreGive(peerMutex);
         return false;
     }
@@ -101,7 +99,7 @@ bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel
     // Check if peer already exists
     for (int i = 0; i < numPeers; ++i) {
         if (memcmp(peers[i].mac_addr, mac_address, MAC_ADDRESS_LENGTH) == 0) {
-            Serial.println("Peer already registered.");
+            LOG_INFO("Peer already registered.");
             xSemaphoreGive(peerMutex);
             return false;
         }
@@ -114,20 +112,19 @@ bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel
     peers[numPeers].peer_info.encrypt = false;
 
     if (esp_now_add_peer(&peers[numPeers].peer_info) != ESP_OK) {
-        Serial.println("Failed to add peer");
+        LOG_ERROR("Failed to add peer");
         xSemaphoreGive(peerMutex);
         return false;
     }
 
     numPeers++;
 
-    Serial.print("Peer registered: ");
-    for(int i =0; i<MAC_ADDRESS_LENGTH; i++) {
-        if(mac_address[i] < 16) Serial.print("0");
-        Serial.print(mac_address[i], HEX);
-        if(i < MAC_ADDRESS_LENGTH - 1) Serial.print(":");
+    LOG_INFO("Peer registered: ");
+    char mac_str[MAC_ADDRESS_LENGTH * 3] = {0};
+    for (int i = 0; i < MAC_ADDRESS_LENGTH; i++) {
+        snprintf(mac_str + i * 3, 4, "%02X%s", mac_address[i], (i < MAC_ADDRESS_LENGTH - 1) ? ":" : "");
     }
-    Serial.println();
+    LOG_INFO("MAC Address: %s", mac_str);
 
     xSemaphoreGive(peerMutex);
     return true;
@@ -137,7 +134,7 @@ bool CommunicationsBase::registerPeer(uint8_t* mac_address, uint8_t wifi_channel
 bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
     // Lock the mutex to protect the peer list
     if (xSemaphoreTake(peerMutex, portMAX_DELAY) != pdTRUE) {
-        Serial.println("Failed to take peer mutex.");
+        LOG_ERROR("Failed to take peer mutex.");
         return false;
     }
 
@@ -146,7 +143,7 @@ bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
         if (memcmp(peers[i].mac_addr, mac_address, MAC_ADDRESS_LENGTH) == 0) {
             // Remove the peer from ESP-NOW
             if (esp_now_del_peer(mac_address) != ESP_OK) {
-                Serial.println("Failed to remove peer from ESP-NOW.");
+                LOG_ERROR("Failed to remove peer from ESP-NOW.");
                 xSemaphoreGive(peerMutex);
                 return false;
             }
@@ -160,14 +157,14 @@ bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
             memset(&peers[numPeers - 1], 0, sizeof(Peer));
 
             numPeers--;
-            Serial.println("Peer unregistered successfully.");
+            LOG_INFO("Peer unregistered successfully.");
 
             xSemaphoreGive(peerMutex);
             return true;
         }
     }
 
-    Serial.println("Peer not found.");
+    LOG_WARNING("Peer not found.");
     xSemaphoreGive(peerMutex);
     return false;
 }
@@ -176,12 +173,12 @@ bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
 bool CommunicationsBase::sendMsg(uint8_t* mac_addr, const uint8_t* data, size_t size) {
     esp_err_t result = esp_now_send(mac_addr, data, size);
     if (result == ESP_OK) {
-        Serial.printf("Message sent successfully to %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+        LOG_INFO("Message sent successfully to %02X:%02X:%02X:%02X:%02X:%02X\r\n",
                       mac_addr[0], mac_addr[1], mac_addr[2],
                       mac_addr[3], mac_addr[4], mac_addr[5]);
         return true;
     } else {
-        Serial.printf("Error sending message: %d\r\n", result);
+        LOG_ERROR("Error sending message: %d", result);
         return false;
     }
 }
