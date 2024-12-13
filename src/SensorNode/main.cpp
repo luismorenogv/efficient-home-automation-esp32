@@ -21,7 +21,7 @@ void setup() {
     Serial.begin(115200);
 
     if (!sensorNode.initialize()) {
-        Serial.println("Initialization failed, going to sleep...");
+        LOG_ERROR("Initialization failed, going to sleep...");
         sensorNode.goSleep();
     }
 

@@ -10,6 +10,10 @@
 
 #pragma once
 
+#include "config.h"
+#include <time.h>
+#include <Arduino.h>
+
 // Class to handle NTP time synchronization
 class NTPClient {
 public:

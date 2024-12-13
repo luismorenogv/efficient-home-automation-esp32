@@ -1,6 +1,6 @@
 /**
  * @file common.h
- * @brief Shared constants, enums, and structures for Master and Sensor Nodes
+ * @brief Shared constants, enums, and structures for Master, RoomNode and MasterNodes
  * 
  * 
  * @author Luis Moreno
@@ -91,10 +91,11 @@ struct NewScheduleMsg {
 // Union of all message types
 union AllMessages {
     AckMsg ack;
-    TempHumidMsg tempHumid;
-    NewSleepPeriodMsg newSleep;
+    TempHumidMsg temp_humid;
+    NewSleepPeriodMsg new_sleep;
     JoinSensorMsg join_sensor;
     JoinRoomMsg join_room;
+    NewScheduleMsg new_schedule;
 };
 
 #define MAX_MSG_SIZE sizeof(union AllMessages)

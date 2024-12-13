@@ -8,6 +8,7 @@
 #pragma once
 #include <SPI.h>
 #include <Adafruit_SHT31.h>
+#include "config.h"
 
 class SHT31Sensor {
 public:
