@@ -71,13 +71,12 @@ void ESPNowHandler::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int
             powerManager.updateSleepPeriod(new_sleep->new_period_ms);
             LOG_INFO("NEW_SLEEP_PERIOD interpreted as ACK");
             ack_received = true;
-            xSemaphoreGive(ackSemaphore);
 
             // Send ACK back to master
-            AckMsg ack_msg;
-            ack_msg.type = MessageType::ACK;
-            ack_msg.acked_msg = MessageType::NEW_SLEEP_PERIOD;
-            CommunicationsBase::sendMsg((uint8_t*)mac_addr, reinterpret_cast<const uint8_t*>(&ack_msg), sizeof(ack_msg));
+            CommunicationsBase::sendAck(mac_addr, MessageType::NEW_SLEEP_PERIOD);
+
+            // Signal semaphore after sending ack
+            xSemaphoreGive(ackSemaphore);
         } else {
             LOG_WARNING("NEW_SLEEP_PERIOD message received with incorrect length.");
         }
