@@ -11,7 +11,7 @@
 RoomNode* RoomNode::instance = nullptr;
 
 RoomNode::RoomNode(uint8_t room_id)
-    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner() {
+    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner(), espnowTaskHandle(NULL) {
     instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
@@ -61,13 +61,16 @@ bool RoomNode::joinNetwork() {
     msg.cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
     msg.warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
 
-    //Start espNow task for ACK message reception
-    BaseType_t result;
+    // If espNowTask has not been created already
+    if (espnowTaskHandle == NULL){
+        //Start espNow task for ACK message reception
+        BaseType_t result;
 
-    result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 2, &espnowTaskHandle);
-    if (result != pdPASS){
-        LOG_ERROR("Failed ESP-NOW Task");
-        return false;
+        result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 3, &espnowTaskHandle);
+        if (result != pdPASS){
+            LOG_ERROR("Failed ESP-NOW Task");
+            return false;
+        }
     }
 
     
@@ -77,19 +80,19 @@ bool RoomNode::joinNetwork() {
         esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
         communications.registerPeer((uint8_t*)master_mac_addr, wifi_channel);
 
-        bool ack_received = false;
+        connected = false;
         uint8_t retries = 0;
-        while (!ack_received && retries < MAX_RETRIES) {
+        while (!connected && retries < MAX_RETRIES) {
             communications.sendMsg(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
             if (communications.waitForAck(MessageType::JOIN_ROOM, ACK_TIMEOUT_MS)) {
-                ack_received = true;
+                connected = true;
             } else {
                 retries++;
                 LOG_WARNING("No ACK, retry (%u/%u)", retries, MAX_RETRIES);
             }
         }
 
-        if (ack_received) {
+        if (connected) {
             LOG_INFO("Master on channel %u", wifi_channel);
             return true;
         }
@@ -106,10 +109,13 @@ void RoomNode::run() {
     result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Lights Task");
 
-    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 2, &presenceTaskHandle);
+    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 3, &presenceTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Presence Task");
 
-    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 2, &NTPSyncTaskHandle);
+    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 1, &NTPSyncTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
+
+    result = xTaskCreate(heartbeatTask, "Heartbeat Task", 2048, this, 2, &HeartBeatTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
 
     LOG_INFO("RoomNode running tasks...");
@@ -224,8 +230,36 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
     }
 }
 
+void RoomNode::heartbeatTask(void* pvParameter){
+    RoomNode* self = static_cast<RoomNode*>(pvParameter);
+
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_PERIOD));
+        if (self->connected){
+            HeartbeatMsg msg;
+            msg.room_id = self->room_id;
+            self->communications.sendMsg(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            if (!self->communications.waitForAck(MessageType::HEARTBEAT, self->HEARTBEAT_TIMEOUT)){
+                self->connected = false;
+                LOG_WARNING("HEARTBEAT Ack not received. Trying to reconnect to the network...");
+            }
+        }
+        if (!self->connected){
+            self->communications.unregisterPeer((uint8_t*)master_mac_addr);
+            if (self->joinNetwork()){
+                LOG_INFO("Reconnection successful");
+            } else {
+                LOG_WARNING("Unable to reconnect to the network");
+            }
+        }
+    }
+    
+}
+
 // If initialization or network join fails, sleeps for 30 minutes
 void RoomNode::tryLater() {
+    LOG_INFO("Going deep sleep for the next 30 minutes");
     esp_sleep_enable_timer_wakeup(30*60*1000000);
     esp_deep_sleep_start();
 }

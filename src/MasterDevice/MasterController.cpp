@@ -66,7 +66,7 @@ void MasterController::initialize() {
         "Web Server Task",
         8192,
         this,
-        1,
+        2,
         &webServerTaskHandle,
         0
     );
@@ -214,18 +214,28 @@ void MasterController::espnowTask(void* pvParameter) {
                 case MessageType::JOIN_ROOM: {
                     JoinRoomMsg* payload = reinterpret_cast<JoinRoomMsg*>(msg.data);
                     uint8_t room_id = payload->room_id;
-                    
+                    self->communications.registerPeer(msg.mac_addr, WiFi.channel());
+                    self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
                     self->dataManager.controlSetup(room_id, msg.mac_addr, 
                                                    payload->warm.hour, payload->warm.min, 
                                                    payload->cold.hour, payload->cold.min);
-                    
-                    self->communications.registerPeer(msg.mac_addr, WiFi.channel());
-                    self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
-                    
                     LOG_INFO("Received JOIN_ROOM from room %u with warm/cold times", room_id);
 
                     // Update Web Interface
                     self->webSockets.sendDataUpdate(room_id);
+                }
+                break;
+
+                case MessageType::HEARTBEAT: {
+                    HeartbeatMsg* payload = reinterpret_cast<HeartbeatMsg*>(msg.data);
+                    uint8_t room_id = payload->room_id;
+                    if (self->dataManager.isRegistered(room_id, NodeType::ROOM)){
+                        self->dataManager.updateHeartbeat(room_id);
+                        self->communications.sendAck(msg.mac_addr, MessageType::HEARTBEAT);
+                    } else {
+                        LOG_WARNING("Heartbeat received from unregistered device");
+                    }
+                    
                 }
                 break;
 
@@ -259,6 +269,7 @@ void MasterController::updateCheckTask(void* pvParameter) {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(CHECK_PENDING_MSG_PERIOD));
         self->checkAndResendUpdates();
+        self->checkHeartbeats();
     }
 }
 
@@ -284,10 +295,23 @@ void MasterController::checkAndResendUpdates() {
                         pendingScheduleUpdate[i].lastAttemptMillis = nowMs;
                     }
                 } else {
-                    LOG_ERROR("RoomNode with ID %u is not responding to new schedule update", i);
-                    pendingScheduleUpdate[i].attempts = 0;
+                    LOG_WARNING("RoomNode with ID %u is not responding to new schedule update", i);
+                    dataManager.unregisterNode(i, NodeType::ROOM);
+                    LOG_INFO("Unregistered roomNode with ID: %u", i);
+                    webSockets.sendDataUpdate(i);
                 }
             }
+        }
+    }
+}
+
+void MasterController::checkHeartbeats(){
+    for (uint8_t i = 0; i < NUM_ROOMS; i++){
+        if (dataManager.isRegistered(i, NodeType::ROOM) && millis() - dataManager.getLatestHeartbeat(i) > HEARTBEAT_TIMEOUT){
+            LOG_WARNING("Heartbeat from RoomNode with ID %u not received in time", i);
+            dataManager.unregisterNode(i, NodeType::ROOM);
+            LOG_INFO("RoomNode with ID %u has been unregistered", i);
+            webSockets.sendDataUpdate(i);
         }
     }
 }

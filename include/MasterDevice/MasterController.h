@@ -73,4 +73,7 @@ private:
 
     // Checks and resends pending updates
     void checkAndResendUpdates();
+
+    // Checks if latest heartbeat is valid for each room
+    void checkHeartbeats();
 };

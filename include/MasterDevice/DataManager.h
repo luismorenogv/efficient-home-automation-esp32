@@ -45,9 +45,10 @@ struct ControlData {
     Time cold;
     Time warm;
     bool pending_update;
+    uint32_t latest_heartbeat;
 
     ControlData() 
-        : registered(false), pending_update(false) 
+        : registered(false), pending_update(false), latest_heartbeat(millis()) 
     {
         memset(mac_addr, 0, sizeof(mac_addr));
         memset(&cold, 0, sizeof(cold));
@@ -110,6 +111,18 @@ public:
     
     // Retrieves the room ID based on MAC address
     uint8_t getId(uint8_t* mac_addr) const;
+
+    // Updates latest room heartbeat
+    void updateHeartbeat(uint8_t room_id);
+
+    // Returns latest heartbeat in ms from room_id
+    uint32_t getLatestHeartbeat(uint8_t room_id);
+
+    // Returns is a sensorNode, roomNode or either of them is registered
+    bool isRegistered(uint8_t room_id, NodeType type = NodeType::NONE);
+
+    // Unregisters roomNode or sensorNode
+    void unregisterNode(uint8_t room_id, NodeType type);
 
 private:
     RoomData rooms[NUM_ROOMS];
