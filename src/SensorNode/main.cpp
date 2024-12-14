@@ -22,7 +22,7 @@ void setup() {
 
     if (!sensorNode.initialize()) {
         LOG_ERROR("Initialization failed, going to sleep...");
-        sensorNode.goSleep();
+        sensorNode.goSleep(false);
     }
 
     if (first_cycle) {
@@ -30,12 +30,14 @@ void setup() {
         if (sensorNode.joinNetwork()) {
             first_cycle = false;
         } else {
-            sensorNode.goSleep();
+            // Unable to connect with the master
+            // Going deep sleep permanently
+            sensorNode.goSleep(true);
         }
     }
 
     sensorNode.run();
-    sensorNode.goSleep();
+    sensorNode.goSleep(false);
 }
 
 void loop() {

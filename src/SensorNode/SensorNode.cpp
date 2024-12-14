@@ -90,10 +90,16 @@ void SensorNode::run() {
 
         if (!ack_received) {
             LOG_ERROR("No ACK after max retries for sensor data");
+            // Try to joinNetwork next cycle
+            *first_cycle = true;
         }
     }
 }
 
-void SensorNode::goSleep() {
-    powerManager.enterDeepSleep();
+void SensorNode::goSleep(bool permanent) {
+    if (permanent) {
+        powerManager.enterPermanentDeepSleep();
+    } else{
+        powerManager.enterDeepSleep();
+    }
 }
