@@ -100,13 +100,15 @@ function displayHistoryModal(data) {
     // Determine chart ranges
     const minTemp = Math.min(...temperatures);
     const maxTemp = Math.max(...temperatures);
-    const tempPadding = maxTemp * 0.4;
+    const tempRange = maxTemp - minTemp || 1; // Avoid division by zero
+    const tempPadding = tempRange * 0.5;
     const tempMin = minTemp - tempPadding;
     const tempMax = maxTemp + tempPadding;
 
     const minHumid = Math.min(...humidities);
     const maxHumid = Math.max(...humidities);
-    const humidPadding = maxHumid * 0.4;
+    const humidRange = maxHumid - minHumid || 1; // Avoid division by zero
+    const humidPadding = humidRange * 0.5;
     const humidMin = minHumid - humidPadding;
     const humidMax = maxHumid + humidPadding;
 
