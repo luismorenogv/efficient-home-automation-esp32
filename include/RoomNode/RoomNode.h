@@ -32,6 +32,7 @@ public:
     void run();
 
 private:
+    const uint32_t HEARTBEAT_TIMEOUT = 2000;
     NTPClient ntpClient;
     RoomCommunications communications;
     LD2410 presenceSensor;
@@ -41,6 +42,7 @@ private:
 
     uint8_t wifi_channel;
     uint8_t room_id;
+    bool connected;
 
     QueueHandle_t espnowQueue;
     QueueHandle_t presenceQueue;
@@ -49,12 +51,14 @@ private:
     TaskHandle_t lightsControlTaskHandle;
     TaskHandle_t presenceTaskHandle;
     TaskHandle_t NTPSyncTaskHandle;
+    TaskHandle_t HeartBeatTaskHandle;
 
     // Task functions
     static void espnowTask(void* pvParameter);
     static void lightsControlTask(void* pvParameter);
     static void presenceTask(void* pvParameter);
     static void NTPSyncTask(void* pvParameter);
+    static void heartbeatTask(void* pvParameter);
 
     // If initialization fails, sleeps to retry later
     void tryLater();

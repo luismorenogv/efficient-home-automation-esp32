@@ -283,18 +283,17 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
             time_t ts = room.sensor.timestamps[index];
 
             if (ts == 0) continue;
-
+            
             tempArray.add(temp);
             humidArray.add(humid);
             timeArray.add(ts);
         }
+        LOG_INFO("Sending history data: timestamps=%d, temperatures=%d, humidities=%d", timeArray.size(), tempArray.size(), humidArray.size());
     }
 
     String jsonString;
     serializeJson(doc, jsonString);
-
     client->text(jsonString);
-    LOG_INFO("Sent history data to client %u for room %u", client->id(), room_id);
 }
 
 void WebSockets::sendError(AsyncWebSocketClient* client, const char* message) {
