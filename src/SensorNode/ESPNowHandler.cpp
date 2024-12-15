@@ -33,7 +33,7 @@ void ESPNowHandler::sendMsg(const uint8_t* data, size_t size) {
     if (numPeers > 0) {
         CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
     } else {
-        Serial.println("No peers registered.");
+        LOG_WARNING("No peers registered.");
     }
 }
 
@@ -46,7 +46,7 @@ bool ESPNowHandler::waitForAck(MessageType expected_ack, unsigned long timeout_m
 
 void ESPNowHandler::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) {
     if (len < 1) {
-        Serial.println("Received empty message.");
+        LOG_INFO("Received empty message.");
         return;
     }
 
@@ -59,29 +59,28 @@ void ESPNowHandler::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int
             if (ack->acked_msg == last_acked_msg) {
                 ack_received = true;
                 xSemaphoreGive(ackSemaphore);
-                Serial.println("ACK received from master");
+                LOG_INFO("ACK received from master");
             }
         } else {
-            Serial.println("ACK received with incorrect length.");
+            LOG_WARNING("ACK received with incorrect length.");
         }
     } else if (msg_type == MessageType::NEW_SLEEP_PERIOD) {
         // Interpret as ACK and update sleep period
         if (len >= sizeof(NewSleepPeriodMsg)) {
             const NewSleepPeriodMsg* new_sleep = reinterpret_cast<const NewSleepPeriodMsg*>(data);
             powerManager.updateSleepPeriod(new_sleep->new_period_ms);
-            Serial.println("NEW_SLEEP_PERIOD interpreted as ACK");
+            LOG_INFO("NEW_SLEEP_PERIOD interpreted as ACK");
             ack_received = true;
-            xSemaphoreGive(ackSemaphore);
 
             // Send ACK back to master
-            AckMsg ack_msg;
-            ack_msg.type = MessageType::ACK;
-            ack_msg.acked_msg = MessageType::NEW_SLEEP_PERIOD;
-            CommunicationsBase::sendMsg((uint8_t*)mac_addr, reinterpret_cast<const uint8_t*>(&ack_msg), sizeof(ack_msg));
+            CommunicationsBase::sendAck(mac_addr, MessageType::NEW_SLEEP_PERIOD);
+
+            // Signal semaphore after sending ack
+            xSemaphoreGive(ackSemaphore);
         } else {
-            Serial.println("NEW_SLEEP_PERIOD message received with incorrect length.");
+            LOG_WARNING("NEW_SLEEP_PERIOD message received with incorrect length.");
         }
     } else {
-        Serial.println("Received unknown or unhandled message type.");
+        LOG_WARNING("Received unknown or unhandled message type.");
     }
 }

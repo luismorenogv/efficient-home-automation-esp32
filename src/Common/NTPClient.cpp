@@ -9,8 +9,6 @@
  */
 
 #include "Common/NTPClient.h"
-#include <time.h>
-#include <Arduino.h>
 
 NTPClient::NTPClient() {
     // Constructor can initialize variables if needed
@@ -25,17 +23,19 @@ void NTPClient::initialize() {
     int retry = 0;
     const int retry_count = 10;
     while (!getLocalTime(&timeinfo) && retry < retry_count) {
-        Serial.println("Waiting for NTP time synchronization");
+        LOG_INFO("Waiting for NTP time synchronization");
         vTaskDelay(pdMS_TO_TICKS(1000));
         retry++;
     }
 
     if (retry == retry_count) {
-        Serial.println("Failed to synchronize time after multiple attempts");
+        LOG_ERROR("Failed to synchronize time after multiple attempts");
     } else {
         time_t now = time(nullptr);
-        Serial.printf("Time synchronized: %ld\r\n", now);
-        Serial.println(&timeinfo, "Current time: %A, %B %d %Y %H:%M:%S");
+        LOG_INFO("Time synchronized: %ld", now);
+        #ifdef ENABLE_LOGGING
+            Serial.println(&timeinfo, "[INFO] Current time: %A, %B %d %Y %H:%M:%S");
+        #endif
     }
 }
 

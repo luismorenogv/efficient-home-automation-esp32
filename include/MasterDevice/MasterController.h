@@ -57,6 +57,9 @@ private:
     QueueHandle_t espnowQueue;          // Queue for incoming ESP-NOW messages
     TaskHandle_t ntpSyncTaskHandle;     // Handle for NTP Sync Task 
 
+    // Sets the master to sleep for the next 30min
+    void tryLater();
+
     // Callback functions for WebSockets
     static void sleepPeriodChangedCallback(uint8_t room_id, uint32_t new_sleep_period_ms);
     static void scheduleChangedCallback(uint8_t room_id, uint8_t warm_hour, uint8_t warm_min, 
@@ -70,4 +73,7 @@ private:
 
     // Checks and resends pending updates
     void checkAndResendUpdates();
+
+    // Checks if latest heartbeat is valid for each room
+    void checkHeartbeats();
 };

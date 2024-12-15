@@ -16,10 +16,10 @@ SHT31Sensor::SHT31Sensor(uint8_t address, uint8_t sda_pin, uint8_t scl_pin) : sh
 bool SHT31Sensor::initialize() {
     Wire.begin();
     if (!sht31.begin(this->address)) {
-        Serial.println("SHT31 not found");
+        LOG_ERROR("SHT31 not found");
         return false;
     }
-    Serial.println("SHT31 ready");
+    LOG_INFO("SHT31 ready");
     return true;
 }
 
@@ -28,7 +28,7 @@ bool SHT31Sensor::readSensorData(float& temperature, float& humidity) {
     humidity = sht31.readHumidity();
 
     if (isnan(temperature) || isnan(humidity)) {
-        Serial.println("Invalid SHT31 readings");
+        LOG_ERROR("Invalid SHT31 readings");
         return false;
     }
     return true;

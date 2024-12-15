@@ -15,6 +15,7 @@
 #include <WiFi.h>
 #include "config.h"
 #include "common.h"
+#include "esp_wifi.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>

@@ -59,55 +59,60 @@ void IRAM_ATTR LD2410::presenceISR() {
 bool LD2410::initialize() {
     LD2410_SERIAL.begin(LD2410_BAUDRATE, SERIAL_8N1);
 
-    // Enable config mode
-    const uint8_t enableConfigCmd[] = {
-        0xFD,0xFC,0xFB,0xFA, 0x04,0x00, 0xFF,0x00,0x01,0x00,0x04,0x03,0x02,0x01
-    };
-    if (!sendCommand(enableConfigCmd, sizeof(enableConfigCmd))) return false;
-    if (!waitForAck(0x01FF)) return false;
+    for (uint8_t i = 0; i < MAX_INIT_RETRIES; i++){
+        // Enable config mode
+        const uint8_t enableConfigCmd[] = {
+            0xFD,0xFC,0xFB,0xFA, 0x04,0x00, 0xFF,0x00,0x01,0x00,0x04,0x03,0x02,0x01
+        };
+        if (!sendCommand(enableConfigCmd, sizeof(enableConfigCmd))) return false;
+        if (!waitForAck(0x01FF)) continue;
 
-    // Set no-one duration
-    const uint8_t setNoOneCmd[] = {
-        0xFD,0xFC,0xFB,0xFA,
-        0x14,0x00,
-        0x60,0x00,
-        0x00,0x00,
-        MAXIMUM_MOVING_DISTANCE_GATE,0x00,0x00,0x00,
-        0x01,0x00,
-        MAXIMUM_STILL_DISTANCE_GATE,0x00,0x00,0x00,
-        0x02,0x00,
-        UNMANNED_DURATION_S,0x00,0x00,0x00,
-        0x04,0x03,0x02,0x01
-    };
-    if (!sendCommand(setNoOneCmd, sizeof(setNoOneCmd))) return false;
-    if (!waitForAck(0x0160)) return false;
+        // Set no-one duration
+        const uint8_t setNoOneCmd[] = {
+            0xFD,0xFC,0xFB,0xFA,
+            0x14,0x00,
+            0x60,0x00,
+            0x00,0x00,
+            MAXIMUM_MOVING_DISTANCE_GATE,0x00,0x00,0x00,
+            0x01,0x00,
+            MAXIMUM_STILL_DISTANCE_GATE,0x00,0x00,0x00,
+            0x02,0x00,
+            UNMANNED_DURATION_S,0x00,0x00,0x00,
+            0x04,0x03,0x02,0x01
+        };
+        if (!sendCommand(setNoOneCmd, sizeof(setNoOneCmd))) return false;
+        if (!waitForAck(0x0160)) continue;
 
-    // Set sensitivity
-    const uint8_t setSensitivityCmd[] = {
-        0xFD,0xFC,0xFB,0xFA,
-        0x14,0x00,
-        0x64,0x00,
-        0x00,0x00,
-        0xFF,0xFF,0x00,0x00,
-        0x01,0x00,
-        SENSITIVITY,0x00,0x00,0x00,
-        0x02,0x00,
-        SENSITIVITY,0x00,0x00,0x00,
-        0x04,0x03,0x02,0x01
-    };
-    if (!sendCommand(setSensitivityCmd, sizeof(setSensitivityCmd))) return false;
-    if (!waitForAck(0x0164)) return false;
+        // Set sensitivity
+        const uint8_t setSensitivityCmd[] = {
+            0xFD,0xFC,0xFB,0xFA,
+            0x14,0x00,
+            0x64,0x00,
+            0x00,0x00,
+            0xFF,0xFF,0x00,0x00,
+            0x01,0x00,
+            SENSITIVITY,0x00,0x00,0x00,
+            0x02,0x00,
+            SENSITIVITY,0x00,0x00,0x00,
+            0x04,0x03,0x02,0x01
+        };
+        if (!sendCommand(setSensitivityCmd, sizeof(setSensitivityCmd))) return false;
+        if (!waitForAck(0x0164)) continue;
 
-    // End config mode
-    const uint8_t endConfigCmd[] = {
-        0xFD,0xFC,0xFB,0xFA,0x02,0x00,0xFE,0x00,
-        0x04,0x03,0x02,0x01
-    };
-    if (!sendCommand(endConfigCmd, sizeof(endConfigCmd))) return false;
-    if (!waitForAck(0x01FE)) return false;
+        // End config mode
+        const uint8_t endConfigCmd[] = {
+            0xFD,0xFC,0xFB,0xFA,0x02,0x00,0xFE,0x00,
+            0x04,0x03,0x02,0x01
+        };
+        if (!sendCommand(endConfigCmd, sizeof(endConfigCmd))) return false;
+        if (!waitForAck(0x01FE)) continue;
 
-    Serial.println("LD2410 successfully configured.");
-    return true;
+        LOG_INFO("LD2410 successfully configured.");
+        return true;
+    }
+
+    LOG_ERROR("Unable to initialize LD2410 configuration");
+    return false;
 }
 
 // Sends a command to LD2410 via UART
@@ -144,6 +149,6 @@ bool LD2410::waitForAck(uint16_t expectedCmdWord, uint8_t expectedStatus) {
         }
     }
 
-    Serial.println("ACK wait timed out or invalid ACK.");
+    LOG_WARNING("ACK wait timed out or invalid ACK.");
     return false;
 }

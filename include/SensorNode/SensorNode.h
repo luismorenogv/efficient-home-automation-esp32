@@ -27,8 +27,8 @@ public:
     // Reads sensor data and sends it, if joined to the master
     void run();
 
-    // Enters deep sleep
-    void goSleep();
+    // Enters deep sleep permanently or with wake up by timer configured
+    void goSleep(bool permanent);
 
     // Attempts to join master network on first run
     bool joinNetwork();
