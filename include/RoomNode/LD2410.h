@@ -30,6 +30,7 @@ public:
     bool initialize();
 
 private:
+    const uint8_t MAX_INIT_RETRIES = 3;
     static void IRAM_ATTR staticPresenceISR();
     void IRAM_ATTR presenceISR();
 

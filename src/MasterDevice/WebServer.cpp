@@ -15,7 +15,7 @@ WebServer::WebServer() : server(80) {
 void WebServer::initialize() {
     // Initialize SPIFFS
     if (!SPIFFS.begin(true)) {
-        Serial.println("Failed to mount SPIFFS");
+        LOG_ERROR("Failed to mount SPIFFS");
         return;
     }
     setupRoutes();
@@ -45,7 +45,7 @@ void WebServer::setupRoutes() {
 
 void WebServer::start() {
     server.begin();
-    Serial.println("Web server started");
+    LOG_INFO("Web server started");
 }
 
 AsyncWebServer& WebServer::getServer() {

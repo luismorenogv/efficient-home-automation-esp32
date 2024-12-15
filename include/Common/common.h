@@ -1,6 +1,6 @@
 /**
  * @file common.h
- * @brief Shared constants, enums, and structures for Master and Sensor Nodes
+ * @brief Shared constants, enums, and structures for Master, RoomNode and MasterNodes
  * 
  * 
  * @author Luis Moreno
@@ -13,12 +13,12 @@
 
 constexpr uint8_t MAC_ADDRESS_LENGTH = 6;
 constexpr uint8_t MAX_WIFI_CHANNEL = 13;
-constexpr uint8_t TOTAL_FRAMES = 6;
+constexpr uint8_t TOTAL_FRAMES = 7;
 constexpr uint8_t ID_NOT_VALID = 255;
 
 // Names of message types for debugging
 const char* const MSG_NAME[TOTAL_FRAMES] = {
-    "JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_TIME"
+    "JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_SCHEDULE", "HEARTBEAT"
 };
 
 enum class MessageType : uint8_t {
@@ -28,11 +28,13 @@ enum class MessageType : uint8_t {
     TEMP_HUMID       = 0x03,
     NEW_SLEEP_PERIOD = 0x04,
     NEW_SCHEDULE     = 0x05,
+    HEARTBEAT        = 0x06
 };
 
 enum class NodeType : uint8_t {
-    SENSOR = 0x00,
-    ROOM   = 0x01,
+    NONE   = 0x00,
+    SENSOR = 0x01,
+    ROOM   = 0x02,
 };
 
 enum class TimeType : uint8_t {
@@ -88,13 +90,21 @@ struct NewScheduleMsg {
     Time warm;
 } __attribute__((packed));
 
+// Holds heartbeat info
+struct HeartbeatMsg {
+    MessageType type = MessageType::HEARTBEAT;   
+    uint8_t room_id;
+} __attribute__((packed));
+
 // Union of all message types
 union AllMessages {
     AckMsg ack;
-    TempHumidMsg tempHumid;
-    NewSleepPeriodMsg newSleep;
+    TempHumidMsg temp_humid;
+    NewSleepPeriodMsg new_sleep;
     JoinSensorMsg join_sensor;
     JoinRoomMsg join_room;
+    NewScheduleMsg new_schedule;
+    HeartbeatMsg heartbeat;
 };
 
 #define MAX_MSG_SIZE sizeof(union AllMessages)

@@ -11,7 +11,7 @@
 RoomNode* RoomNode::instance = nullptr;
 
 RoomNode::RoomNode(uint8_t room_id)
-    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner() {
+    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner(), espnowTaskHandle(NULL) {
     instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
@@ -26,21 +26,13 @@ void RoomNode::initialize() {
 
     communications.initializeWifi();
     if (!communications.initializeESPNOW()) {
-        Serial.println("ESP-NOW init failed.");
+        LOG_ERROR("ESP-NOW init failed.");
         tryLater();
     }
 
     communications.setQueue(espnowQueue);
     ntpClient.initialize();
     WiFi.disconnect(); 
-
-    Serial.println("Joining network...");
-    if(!joinNetwork()){
-        Serial.println("No master connection.");
-        tryLater();
-    } else {
-        Serial.println("Joined network.");
-    }
 
     // Set initial mode based on current time
     time_t now = time(nullptr);
@@ -50,7 +42,7 @@ void RoomNode::initialize() {
 
     // Initialize lights state and mode
     if(!lights.initializeState(LDR_PIN) || !lights.initializeMode(current_minutes)){
-        Serial.println("Lights init failed.");
+        LOG_ERROR("Lights init failed.");
         tryLater();
     }
 
@@ -62,18 +54,23 @@ void RoomNode::initialize() {
 
 // Attempts to join master network by cycling through channels and waiting for ACK
 bool RoomNode::joinNetwork() {
+    LOG_INFO("Attempting to join network...");
+
     JoinRoomMsg msg;
     msg.room_id = room_id;
     msg.cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
     msg.warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
 
-    //Start espNow task for ACK message reception
-    BaseType_t result;
+    // If espNowTask has not been created already
+    if (espnowTaskHandle == NULL){
+        //Start espNow task for ACK message reception
+        BaseType_t result;
 
-    result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 2, &espnowTaskHandle);
-    if (result != pdPASS){
-        Serial.println("Failed ESP-NOW Task");
-        return false;
+        result = xTaskCreate(espnowTask, "ESP-NOW Task", 4096, this, 3, &espnowTaskHandle);
+        if (result != pdPASS){
+            LOG_ERROR("Failed ESP-NOW Task");
+            return false;
+        }
     }
 
     
@@ -83,23 +80,23 @@ bool RoomNode::joinNetwork() {
         esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
         communications.registerPeer((uint8_t*)master_mac_addr, wifi_channel);
 
-        bool ack_received = false;
+        connected = false;
         uint8_t retries = 0;
-        while (!ack_received && retries < MAX_RETRIES) {
+        while (!connected && retries < MAX_RETRIES) {
             communications.sendMsg(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
             if (communications.waitForAck(MessageType::JOIN_ROOM, ACK_TIMEOUT_MS)) {
-                ack_received = true;
+                connected = true;
             } else {
                 retries++;
-                Serial.printf("No ACK, retry (%u/%u)\r\n", retries, MAX_RETRIES);
+                LOG_WARNING("No ACK, retry (%u/%u)", retries, MAX_RETRIES);
             }
         }
 
-        if (ack_received) {
-            Serial.printf("Master on channel %u\r\n", wifi_channel);
+        if (connected) {
+            LOG_INFO("Master on channel %u", wifi_channel);
             return true;
         }
-        Serial.printf("No ACK in channel %u\r\n", wifi_channel);
+        LOG_WARNING("No ACK in channel %u", wifi_channel);
         communications.unregisterPeer((uint8_t*)master_mac_addr);
     }
     return false;
@@ -110,15 +107,18 @@ void RoomNode::run() {
     BaseType_t result;
     
     result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
-    if (result != pdPASS) Serial.println("Failed Lights Task");
+    if (result != pdPASS) LOG_ERROR("Failed Lights Task");
 
-    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 2, &presenceTaskHandle);
-    if (result != pdPASS) Serial.println("Failed Presence Task");
+    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 3, &presenceTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed Presence Task");
 
-    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 2, &NTPSyncTaskHandle);
-    if (result != pdPASS) Serial.println("Failed NTPSync Task");
+    result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 1, &NTPSyncTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
 
-    Serial.println("RoomNode running tasks...");
+    result = xTaskCreate(heartbeatTask, "Heartbeat Task", 2048, this, 2, &HeartBeatTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
+
+    LOG_INFO("RoomNode running tasks...");
 }
 
 // Handles incoming ESP-NOW messages from master
@@ -133,7 +133,7 @@ void RoomNode::espnowTask(void* pvParameter) {
                 case MessageType::ACK:
                     {
                         if (msg.len != sizeof(AckMsg)) {
-                            Serial.println("Invalid ACK length.");
+                            LOG_WARNING("Invalid ACK length.");
                             break;
                         }
                         AckMsg* payload = reinterpret_cast<AckMsg*>(msg.data);
@@ -143,7 +143,7 @@ void RoomNode::espnowTask(void* pvParameter) {
                 case MessageType::NEW_SCHEDULE:
                     {
                         if (msg.len != sizeof(NewScheduleMsg)) {
-                            Serial.println("Invalid NEW_SCHEDULE length.");
+                            LOG_WARNING("Invalid NEW_SCHEDULE length.");
                             break;
                         }
                         NewScheduleMsg* payload = reinterpret_cast<NewScheduleMsg*>(msg.data);
@@ -152,7 +152,7 @@ void RoomNode::espnowTask(void* pvParameter) {
                     }
                     break;
                 default:
-                    Serial.printf("Unknown message type: %d\r\n", msg_type);
+                    LOG_WARNING("Unknown message type: %d", msg_type);
             }
         }
     }
@@ -189,16 +189,16 @@ void RoomNode::presenceTask(void* pvParameter) {
         if (xQueueReceive(self->presenceQueue, &presenceState, portMAX_DELAY) == pdTRUE) {
             bool new_presence = (presenceState == HIGH);
             if (new_presence && !previous_presence) {
-                Serial.println("Presence detected: Lights ON");
+                LOG_INFO("Presence detected: Lights ON");
                 if(!self->lights.sendCommand(Command::ON)){
-                    Serial.println("Lights ON failed");
+                    LOG_WARNING("Lights ON failed");
                 }
             } else if (!new_presence && previous_presence) {
-                Serial.println("No presence: OFF AC/Lights");
+                LOG_INFO("No presence: OFF AC/Lights");
                 self->airConditioner.turnOff();
                 if(self->lights.isOn()){
                     if(!self->lights.sendCommand(Command::OFF)){
-                        Serial.println("Lights OFF failed");
+                        LOG_WARNING("Lights OFF failed");
                     }
                 }
             }
@@ -213,22 +213,53 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(NTPSYNC_PERIOD));
-        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-        Serial.print("WiFi reconnecting for NTP");
+        WiFi.reconnect();
+        LOG_INFO("WiFi reconnecting for NTP");
         while (WiFi.status() != WL_CONNECTED) {
-            delay(500);
-            Serial.print(".");
+            vTaskDelay(pdMS_TO_TICKS(500));
+            #ifdef ENABLE_LOGGING
+                Serial.print(".");
+            #endif
         }
-        Serial.println("\nWiFi reconnected");
+        LOG_INFO("Wi-Fi connected");
         self->ntpClient.initialize();
 
         WiFi.disconnect();
-        Serial.println("WiFi disconnected after NTP sync");
+        LOG_INFO("WiFi disconnected after NTP sync");
+        esp_wifi_set_channel(self->wifi_channel, WIFI_SECOND_CHAN_NONE); // Set WiFi channel back to master's channel
     }
+}
+
+void RoomNode::heartbeatTask(void* pvParameter){
+    RoomNode* self = static_cast<RoomNode*>(pvParameter);
+
+    while (true)
+    {
+        vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_PERIOD));
+        if (self->connected){
+            HeartbeatMsg msg;
+            msg.room_id = self->room_id;
+            self->communications.sendMsg(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+            if (!self->communications.waitForAck(MessageType::HEARTBEAT, self->HEARTBEAT_TIMEOUT)){
+                self->connected = false;
+                LOG_WARNING("HEARTBEAT Ack not received. Trying to reconnect to the network...");
+            }
+        }
+        if (!self->connected){
+            self->communications.unregisterPeer((uint8_t*)master_mac_addr);
+            if (self->joinNetwork()){
+                LOG_INFO("Reconnection successful");
+            } else {
+                LOG_WARNING("Unable to reconnect to the network");
+            }
+        }
+    }
+    
 }
 
 // If initialization or network join fails, sleeps for 30 minutes
 void RoomNode::tryLater() {
+    LOG_INFO("Going deep sleep for the next 30 minutes");
     esp_sleep_enable_timer_wakeup(30*60*1000000);
     esp_deep_sleep_start();
 }
