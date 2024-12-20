@@ -9,12 +9,15 @@
 #include "RoomNode/Lights.h"
 #include <Arduino.h>
 
-Lights::Lights() : is_on(false), transmitter_pin(TRANSMITTER_PIN), warm_mode(false) {
+Lights::Lights() : is_on(false), transmitter_pin(TRANSMITTER_PIN), warm_mode(false),
+                   max_brightness(false), min_brightness(false) {
     pinMode(transmitter_pin, OUTPUT);
     digitalWrite(transmitter_pin, LOW);
     // Default schedules
     warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
     cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
+
+    transmitterMutex = xSemaphoreCreateMutex();
 }
 
 // Sends a bit sequence to the transmitter pin
@@ -27,12 +30,26 @@ void Lights::transmit(const char* bits) {
 }
 
 // Sends a command followed by repeats
-void Lights::sendSignal(const char* command, const char* repeat) {
-    transmit(command);
+bool Lights::sendSignal(const char* command, const char* repeat) {
+    // Attempt to take the mutex with a timeout to prevent deadlocks
+    if (xSemaphoreTake(transmitterMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        // Successfully acquired the mutex
+        transmit(command);
     for (int i = 0; i < NUM_REPEATS; i++) {
         delayMicroseconds(PAUSE_MS);
         transmit(repeat);
     }
+        
+        // Release the mutex after transmission
+        xSemaphoreGive(transmitterMutex);
+    } else {
+        // Failed to acquire the mutex within the timeout
+        LOG_WARNING("Failed to acquire transmitter mutex. Command not sent.");
+        return false;
+    }
+
+    return true;
+    
 }
 
 // Reads current LDR value
@@ -47,7 +64,7 @@ bool Lights::initializeState(uint8_t ldr_pin) {
         uint16_t initial_lux = readLDR(ldr_pin);
         LOG_INFO("Initial LDR: %u", initial_lux);
         
-        sendSignal(Light, LightRepeat);
+        send(Command::ON);
         delay(VERIFY_DELAY_MS);
         
         uint16_t new_lux = readLDR(ldr_pin);
@@ -70,7 +87,8 @@ bool Lights::initializeState(uint8_t ldr_pin) {
 }
 
 // Sends a command and verifies its effect using LDR readings
-bool Lights::sendCommand(Command command) {
+CommandResult Lights::sendCommand(Command command) {
+    CommandResult result = CommandResult::UNCLEAR;
     LOG_INFO("Sending cmd: %u", static_cast<uint8_t>(command));
     uint16_t initial_lux = readLDR(LDR_PIN);
     LOG_INFO("LDR before cmd: %u", initial_lux);
@@ -81,49 +99,33 @@ bool Lights::sendCommand(Command command) {
     uint16_t new_lux = readLDR(LDR_PIN);
     LOG_INFO("LDR after cmd: %u", new_lux);
 
-    // Based on command, check if effect matches expectations
-    bool expected_on = (command == Command::ON);
-    bool expected_off = (command == Command::OFF);
-
-    if (expected_on) {
-        if (new_lux > initial_lux + LDR_MARGIN) {
-            is_on = true;
-            LOG_INFO("ON verified.");
-            return true;
+    // Verify result according to command, initial_lux and new_lux
+    if (command == Command::MORE_LIGHT || command == Command::ON){
+        if(new_lux > initial_lux + LDR_MARGIN){
+            result = CommandResult::POSITIVE;
+        } else if (new_lux < initial_lux - LDR_MARGIN){
+            result = CommandResult::NEGATIVE;
+        } else{
+            result = CommandResult::UNCLEAR;
         }
-        LOG_WARNING("Failed to verify ON.");
-        return false;
-    } else if (expected_off) {
-        if (new_lux < initial_lux - LDR_MARGIN) {
-            is_on = false;
-            LOG_INFO("OFF verified.");
-            return true;
+    } else if (command == Command::LESS_LIGHT || command == Command::OFF){
+        if(new_lux < initial_lux - LDR_MARGIN){
+            result = CommandResult::POSITIVE;
+        } else if (new_lux > initial_lux + LDR_MARGIN){
+            result = CommandResult::NEGATIVE;
+        } else{
+            result = CommandResult::UNCLEAR;
         }
-        LOG_WARNING("Failed to verify OFF.");
-        return false;
-    } else if (command == Command::MORE_LIGHT) {
-        if (new_lux > initial_lux) {
-            LOG_INFO("Brightness up verified.");
-            return true;
-        }
-        LOG_WARNING("Failed to verify MORE_LIGHT.");
-        return false;
-    } else if (command == Command::LESS_LIGHT) {
-        if (new_lux < initial_lux) {
-            LOG_INFO("Brightness down verified.");
-            return true;
-        }
-        LOG_WARNING("Failed to verify LESS_LIGHT.");
-        return false;
-    } else if (command == Command::BLUE || command == Command::YELLOW) {
-        // Color changes assumed successful
-        LOG_INFO("Color change command sent.");
-        return true;
+    } else {
+        // Color change command is assumed as positive
+        result = CommandResult::POSITIVE;
     }
-
-    LOG_WARNING("Unknown command verification failed.");
-    return false;
+    if (result == CommandResult::POSITIVE){
+        is_on = true;
+    }
+    LOG_INFO("Command %s resulted %s", COMMAND_NAMES[static_cast<uint8_t>(command)], RESULT_NAMES[static_cast<uint8_t>(result)]);
 }
+
 
 bool Lights::isOn() const {
     return is_on;
@@ -158,7 +160,12 @@ bool Lights::determineMode(uint16_t current_minutes) const {
 bool Lights::initializeMode(uint16_t current_minutes) {
     warm_mode = determineMode(current_minutes);
     LOG_INFO("Initial mode: %s", warm_mode ? "WARM" : "COLD");
-    return warm_mode ? sendCommand(Command::YELLOW) : sendCommand(Command::BLUE);
+    if (warm_mode){
+        sendCommand(Command::YELLOW);
+    } else {
+        sendCommand(Command::BLUE);
+    }
+    return true;
 }
 
 // Checks if mode changed and updates color if needed
@@ -178,53 +185,77 @@ void Lights::adjustBrightness(uint8_t ldr_pin) {
     LOG_INFO("Current LDR: %u", current_lux);
 
     if (current_lux < DARK_THRESHOLD) {
-        LOG_INFO("Increasing brightness.");
-        uint8_t failures = 0;
-        while(readLDR(ldr_pin) < DARK_THRESHOLD) {
-            if (!sendCommand(Command::MORE_LIGHT)) {
-                failures++;
-                if (failures >= MAX_FAILURES) {
-                    LOG_INFO("Max brightness reached.");
-                    break;
+        if (!max_brightness){
+            min_brightness = false;
+            LOG_INFO("Increasing brightness.");
+            uint8_t failures = 0;
+            while(readLDR(ldr_pin) < DARK_THRESHOLD) {
+                if (sendCommand(Command::MORE_LIGHT) != CommandResult::POSITIVE) {
+                    failures++;
+                    if (failures >= MAX_FAILURES) {
+                        LOG_INFO("Max brightness reached.");
+                        break;
+                    }
                 }
             }
         }
     } else if (current_lux > BRIGHT_THRESHOLD) {
-        LOG_INFO("Decreasing brightness.");
-        uint8_t failures = 0;
-        while(readLDR(ldr_pin) > BRIGHT_THRESHOLD) {
-            if (!sendCommand(Command::LESS_LIGHT)) {
-                failures++;
-                if (failures >= MAX_FAILURES) {
-                    LOG_INFO("Min brightness reached.");
-                    break;
+        if (!min_brightness){
+            max_brightness = false;
+            LOG_INFO("Decreasing brightness.");
+            uint8_t failures = 0;
+            while(readLDR(ldr_pin) > BRIGHT_THRESHOLD) {
+                if (sendCommand(Command::LESS_LIGHT) != CommandResult::POSITIVE) {
+                    failures++;
+                    if (failures >= MAX_FAILURES) {
+                        LOG_INFO("Min brightness reached.");
+                        break;
+                    }
                 }
             }
         }
     }
 }
 
-// Sends a predefined signal sequence based on the command
-void Lights::send(Command command) {
-    switch(command) {
-        case Command::ON:
-        case Command::OFF:
-            sendSignal(Light, LightRepeat);
-            break;
-        case Command::MORE_LIGHT:
-            sendSignal(MoreLight, MoreRepeat);
-            break;
-        case Command::LESS_LIGHT:
-            sendSignal(LessLight, LessRepeat);
-            break;
-        case Command::BLUE:
-            sendSignal(Blue, BlueRepeat);
-            break;
-        case Command::YELLOW:
-            sendSignal(Yellow, YellowRepeat);
-            break;
-        default:
-            LOG_WARNING("Unknown command");
-            break;
+bool Lights::isEnoughLight(uint8_t ldr_pin){
+    uint16_t current_lux = readLDR(ldr_pin);
+    LOG_INFO("Current light: %u", current_lux);
+    if (current_lux >= DARK_THRESHOLD){
+        LOG_INFO("enough");
+        return true;
     }
+    return false;
+}
+
+// Sends a predefined signal sequence based on the command
+bool Lights::send(Command command) {
+    bool success = false;
+    for (uint8_t i = 0; i < MAX_TRANSMIT_RETRIES; i++){
+        switch(command) {
+            case Command::ON:
+            case Command::OFF:
+                success = sendSignal(Light, LightRepeat);
+                break;
+            case Command::MORE_LIGHT:
+                success = sendSignal(MoreLight, MoreRepeat);
+                break;
+            case Command::LESS_LIGHT:
+                success = sendSignal(LessLight, LessRepeat);
+                break;
+            case Command::BLUE:
+                success = sendSignal(Blue, BlueRepeat);
+                break;
+            case Command::YELLOW:
+                success = sendSignal(Yellow, YellowRepeat);
+                break;
+            default:
+                LOG_WARNING("Unknown command");
+                break;
+        }
+
+        if (success){
+            return success;
+        }
+    }
+    return false;
 }
