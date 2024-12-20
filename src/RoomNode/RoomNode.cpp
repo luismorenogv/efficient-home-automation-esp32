@@ -41,7 +41,7 @@ void RoomNode::initialize() {
     uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
     // Initialize lights state and mode
-    if(!lights.initializeState(LDR_PIN) || !lights.initializeMode(current_minutes)){
+    if(!lights.initializeState(LDR_PIN)){
         LOG_ERROR("Lights init failed.");
         tryLater();
     }
@@ -105,12 +105,12 @@ bool RoomNode::joinNetwork() {
 // Creates FreeRTOS tasks for handling communications, lights, presence, and NTP sync
 void RoomNode::run() {
     BaseType_t result;
-    
-    result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
-    if (result != pdPASS) LOG_ERROR("Failed Lights Task");
 
     result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 3, &presenceTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Presence Task");
+    
+    result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed Lights Task");
 
     result = xTaskCreate(NTPSyncTask, "NTPSync Task", 4096, this, 1, &NTPSyncTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
@@ -161,6 +161,7 @@ void RoomNode::espnowTask(void* pvParameter) {
 // Periodically checks and updates lights mode/brightness
 void RoomNode::lightsControlTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
+    bool lights_on = false;
 
     while (true) {
         if (self->lights.isOn()){
@@ -168,11 +169,17 @@ void RoomNode::lightsControlTask(void* pvParameter) {
             struct tm timeinfo;
             localtime_r(&now, &timeinfo);
             uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
-
-            self->lights.checkAndUpdateMode(current_minutes);
+            // Initialize mode each time the lights are turned on
+            if (!lights_on){
+                self->lights.initializeMode(current_minutes);
+                lights_on = true;
+            } else {
+                self->lights.checkAndUpdateMode(current_minutes);
+            }
             self->lights.adjustBrightness(LDR_PIN);
-
             
+        } else {
+            lights_on = false;
         }
         vTaskDelay(pdMS_TO_TICKS(LIGHTS_CONTROL_PERIOD));
     }
@@ -181,24 +188,51 @@ void RoomNode::lightsControlTask(void* pvParameter) {
 // Monitors presence events from LD2410 and controls lights/AC accordingly
 void RoomNode::presenceTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
+    bool previous_presence = false; // Set initially to false as lights are off initially
     self->presenceSensor.setQueue(self->presenceQueue);
     self->presenceSensor.start();
-    bool previous_presence = false;
     while (true) {
-        uint8_t presenceState;
-        if (xQueueReceive(self->presenceQueue, &presenceState, portMAX_DELAY) == pdTRUE) {
-            bool new_presence = (presenceState == HIGH);
+        uint8_t presence_state;
+        if (xQueueReceive(self->presenceQueue, &presence_state, portMAX_DELAY) == pdTRUE) {
+            bool new_presence = (presence_state == HIGH);
             if (new_presence && !previous_presence) {
-                LOG_INFO("Presence detected: Lights ON");
-                if(!self->lights.sendCommand(Command::ON)){
-                    LOG_WARNING("Lights ON failed");
+                LOG_INFO("Presence detected.");
+                if (self->lights.isEnoughLight(LDR_PIN)){
+                    LOG_INFO("Lights are not necessary --> Enough natural light");
                 }
+                else{
+                    if (self->lights.isOn()){
+                        LOG_INFO("Lights are already ON");
+                    } else{
+                        LOG_INFO("Turning lights ON");
+                        CommandResult result = self->lights.sendCommand(Command::ON);
+                        if(result == CommandResult::UNCLEAR){
+                            LOG_INFO("Lights are unavailable");
+                            continue;
+                        } else if (result == CommandResult::NEGATIVE){
+                            LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
+                            self->lights.sendCommand(Command::ON);
+                        } else {
+                            LOG_INFO("Lights succesfully turned ON");
+                        }
+                    }
+                }
+                
             } else if (!new_presence && previous_presence) {
-                LOG_INFO("No presence: OFF AC/Lights");
+                LOG_INFO("No presence.");
                 self->airConditioner.turnOff();
-                if(self->lights.isOn()){
-                    if(!self->lights.sendCommand(Command::OFF)){
-                        LOG_WARNING("Lights OFF failed");
+                if(!self->lights.isOn()){
+                    LOG_INFO("Lights are already OFF");
+                } else{
+                    CommandResult result = self->lights.sendCommand(Command::OFF);
+                    if(result == CommandResult::UNCLEAR){
+                        LOG_INFO("Lights are unavailable");
+                        continue;
+                    } else if (result == CommandResult::NEGATIVE){
+                        LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
+                        self->lights.sendCommand(Command::OFF);
+                    } else{
+                        LOG_INFO("Lights succesfully turned OFF");
                     }
                 }
             }
