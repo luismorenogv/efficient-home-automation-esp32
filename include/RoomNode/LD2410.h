@@ -26,6 +26,9 @@ public:
     // Starts the interrupt for presence detection
     void start();
 
+    // Returns current presence state
+    bool getPresence();
+
     // Configures sensor parameters via UART
     bool initialize();
 

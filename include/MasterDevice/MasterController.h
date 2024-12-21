@@ -76,4 +76,7 @@ private:
 
     // Checks if latest heartbeat is valid for each room
     void checkHeartbeats();
+
+    // Checks if expected new SensorNode message has arrived in time or expired
+    void checkSensorNodes();
 };
