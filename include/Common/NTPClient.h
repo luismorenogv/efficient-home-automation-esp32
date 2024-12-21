@@ -24,4 +24,12 @@ public:
     
     // Checks if the system time is valid
     bool isTimeValid();
+
+    // Checks if the current time is within nighttime hours
+    bool isNightTime();
+
+private:
+    // Define nighttime start and end hours (24-hour format)
+    static constexpr uint8_t NIGHTTIME_START_HOUR = 23;
+    static constexpr uint8_t NIGHTTIME_END_HOUR = 7;
 };

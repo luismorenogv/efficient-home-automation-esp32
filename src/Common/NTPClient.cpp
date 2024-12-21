@@ -44,3 +44,28 @@ bool NTPClient::isTimeValid() {
     time_t now = time(nullptr);
     return now > 1732288146; // Set to Nov 22, 2024
 }
+
+// Checks if the current time is within nighttime hours
+bool NTPClient::isNightTime() {
+    struct tm timeinfo;
+    
+    // Attempt to get the current local time
+    if (!getLocalTime(&timeinfo)) {
+        LOG_WARNING("Failed to get local time. Assuming it's not nighttime.");
+        return false;
+    }
+
+    uint8_t current_hour = timeinfo.tm_hour;
+
+    if (NIGHTTIME_START_HOUR > NIGHTTIME_END_HOUR) {
+        if (current_hour >= NIGHTTIME_START_HOUR || current_hour < NIGHTTIME_END_HOUR) {
+            return true;
+        }
+    } else {
+        if (current_hour >= NIGHTTIME_START_HOUR && current_hour < NIGHTTIME_END_HOUR) {
+            return true;
+        }
+    }
+
+    return false;
+}

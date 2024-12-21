@@ -32,6 +32,7 @@ void LD2410::setQueue(QueueHandle_t queue) {
 void LD2410::start() {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     uint8_t presenceState = digitalRead(LD2410_PIN);
+    LOG_INFO("Presence sensor initial state: %s", presenceState == HIGH ? "PRESENCE" : "NO PRESENCE" );
     xQueueSendFromISR(presenceQueue, &presenceState, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
         portYIELD_FROM_ISR();
@@ -151,4 +152,12 @@ bool LD2410::waitForAck(uint16_t expectedCmdWord, uint8_t expectedStatus) {
 
     LOG_WARNING("ACK wait timed out or invalid ACK.");
     return false;
+}
+
+bool LD2410::getPresence(){
+    if (digitalRead(LD2410_PIN) == HIGH){
+        return true;
+    } else {
+        return false;
+    }
 }

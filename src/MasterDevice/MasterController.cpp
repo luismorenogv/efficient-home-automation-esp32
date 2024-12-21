@@ -270,6 +270,7 @@ void MasterController::updateCheckTask(void* pvParameter) {
         vTaskDelay(pdMS_TO_TICKS(CHECK_PENDING_MSG_PERIOD));
         self->checkAndResendUpdates();
         self->checkHeartbeats();
+        self->checkSensorNodes();
     }
 }
 
@@ -312,6 +313,18 @@ void MasterController::checkHeartbeats(){
             dataManager.unregisterNode(i, NodeType::ROOM);
             LOG_INFO("RoomNode with ID %u has been unregistered", i);
             webSockets.sendDataUpdate(i);
+        }
+    }
+}
+
+void MasterController::checkSensorNodes(){
+    for (uint8_t i = 0; i < NUM_ROOMS; i++){
+        if (dataManager.isRegistered(i, NodeType::SENSOR)){
+            if (!dataManager.checkIfSensorActive(i)){
+                LOG_WARNING("Data from SensorNode with ID %u not received in time", i);
+                dataManager.unregisterNode(i, NodeType::SENSOR);
+                LOG_INFO("SensorNode with ID %u has been unregistered", i);
+            }
         }
     }
 }

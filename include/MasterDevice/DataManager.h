@@ -26,10 +26,12 @@ struct SensorData {
     uint16_t valid_data_points;
     bool pending_update;
     uint32_t new_sleep_period_ms;
+    uint32_t latest_sensor_reception;
 
     SensorData() 
         : registered(false), sleep_period_ms(DEFAULT_SLEEP_DURATION), index(0),
-          valid_data_points(0), pending_update(false), new_sleep_period_ms(DEFAULT_SLEEP_DURATION) 
+          valid_data_points(0), pending_update(false), new_sleep_period_ms(DEFAULT_SLEEP_DURATION),
+          latest_sensor_reception(millis())
     {
         memset(temperature, 0, sizeof(temperature));
         memset(humidity, 0, sizeof(humidity));
@@ -123,6 +125,9 @@ public:
 
     // Unregisters roomNode or sensorNode
     void unregisterNode(uint8_t room_id, NodeType type);
+
+    // Returns false if latest message from the sensor has expired (>sleep_period)
+    bool checkIfSensorActive(uint8_t room_id);
 
 private:
     RoomData rooms[NUM_ROOMS];

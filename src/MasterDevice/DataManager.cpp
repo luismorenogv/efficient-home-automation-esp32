@@ -22,12 +22,14 @@ void DataManager::addSensorData(uint8_t room_id, float temperature, float humidi
             room.sensor.temperature[idx] = temperature;
             room.sensor.humidity[idx] = humidity;
             room.sensor.timestamps[idx] = timestamp;
+            rooms[room_id].sensor.latest_sensor_reception = millis();
             room.sensor.valid_data_points++;
             if (room.sensor.valid_data_points > MAX_DATA_POINTS) {
                 room.sensor.valid_data_points = MAX_DATA_POINTS;
             }
             // Update index for circular buffer
             room.sensor.index = (idx + 1) % MAX_DATA_POINTS;
+            
         xSemaphoreGive(sensorMutex);
     }
 }
@@ -118,6 +120,7 @@ void DataManager::sensorSetup(uint8_t room_id, const uint8_t* mac_addr, uint32_t
             rooms[room_id].sensor.new_sleep_period_ms = sleep_period_ms;
             rooms[room_id].sensor.pending_update = false; // No pending update initially
             rooms[room_id].sensor.registered = true; // Register sensor
+            rooms[room_id].sensor.latest_sensor_reception = millis();
         xSemaphoreGive(sensorMutex);
     }
 }
@@ -255,4 +258,18 @@ void DataManager::unregisterNode(uint8_t room_id, NodeType type){
             rooms[room_id].sensor.registered = false; 
         xSemaphoreGive(sensorMutex);
     }
+}
+
+bool DataManager::checkIfSensorActive(uint8_t room_id){
+    uint32_t latest_time;
+    uint32_t sleep_period;
+    xSemaphoreTake(sensorMutex, portMAX_DELAY);
+        latest_time = rooms[room_id].sensor.latest_sensor_reception;
+        sleep_period = rooms[room_id].sensor.sleep_period_ms;
+    xSemaphoreGive(sensorMutex);
+
+    if (millis() - latest_time > sleep_period * 1.2){
+        return false;
+    }
+    return true;
 }

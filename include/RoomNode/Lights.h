@@ -26,6 +26,9 @@ constexpr const char YellowRepeat[] = "10111000100010111011101110111011101110001
 constexpr const char Blue[] = "1110111011101110001000101110001011100010111011100010111011100010001000101110111011100010111011100010001000100010111011101110111";
 constexpr const char BlueRepeat[] = "101110111011101110001000101110001011100010111011100010111011100010001000101110111011100010111011100010001000100010111011101110111";
 
+constexpr const char* COMMAND_NAMES[] = {"ON", "OFF", "MORE_LIGHT", "LESS_LIGHT", "BLUE", "YELLOW"};
+constexpr const char* RESULT_NAMES[] = {"POSITIVE", "UNCLEAR", "NEGATIVE"};
+
 enum class Command : uint8_t {
     ON,
     OFF,
@@ -33,6 +36,12 @@ enum class Command : uint8_t {
     LESS_LIGHT,
     BLUE,
     YELLOW,
+};
+
+enum class CommandResult : uint8_t {
+    POSITIVE,
+    UNCLEAR,
+    NEGATIVE,
 };
 
 class Lights {
@@ -45,7 +54,7 @@ public:
     bool initializeState(uint8_t ldr_pin);
 
     // Sends a command and verifies its effect using LDR
-    bool sendCommand(Command command);
+    CommandResult sendCommand(Command command);
 
     // Checks if lights are currently on
     bool isOn() const;
@@ -62,6 +71,9 @@ public:
     // Adjusts brightness within thresholds using MORE/LESS commands
     void adjustBrightness(uint8_t ldr_pin);
 
+    // Check if there is enough light
+    bool isEnoughLight(uint8_t ldr_pin);
+
 private:
     const uint8_t MAX_INIT_RETRIES = 3;
     const uint16_t DIGIT_DURATION = 350; // µs per bit
@@ -72,6 +84,7 @@ private:
     const uint16_t VERIFY_DELAY_MS = 1000;
     const uint16_t DARK_THRESHOLD = 2000;
     const uint16_t BRIGHT_THRESHOLD = 4000;
+    const uint8_t MAX_TRANSMIT_RETRIES = 3;
 
     bool is_on; 
     uint8_t transmitter_pin;
@@ -79,17 +92,23 @@ private:
     Time cold;
     bool warm_mode;
 
+    bool max_brightness;
+    bool min_brightness;
+
+    // Mutex to protect RF transmitter
+    SemaphoreHandle_t transmitterMutex;
+
     // Sends a bit sequence to transmitter
     void transmit(const char *bits);
 
     // Sends a command with repeats
-    void sendSignal(const char *command, const char *repeat);
+    bool sendSignal(const char *command, const char *repeat);
 
     // Reads LDR value
     uint16_t readLDR(uint8_t ldr_pin);
 
     // Sends a specific command (ON, OFF, MORE_LIGHT, etc.)
-    void send(Command command);
+    bool send(Command command);
 
     // Determines if current time falls into warm or cold mode
     bool determineMode(uint16_t current_minutes) const;

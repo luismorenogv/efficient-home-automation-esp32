@@ -23,9 +23,10 @@ constexpr const uint8_t* master_mac_addr = esp32s3_mac;
  *                      Master Device                         *
  *************************************************************/
 #ifdef MODE_MASTER
-constexpr uint8_t NUM_ROOMS = 3;                             // Number of rooms managed
+constexpr uint8_t NUM_ROOMS = 6;                             // Number of rooms managed
 constexpr uint16_t MAX_DATA_POINTS = 300;                    // Maximum sensor data points per room
-constexpr const char* ROOM_NAME[NUM_ROOMS] = {"Room Luis", "Room Pablo", "Room Ana"}; // Names of the rooms
+constexpr const char* ROOM_NAME[NUM_ROOMS] = {"Dormitorio Luis", "Dormitorio Pablo", "Dormitorio Ana",
+                                              "Cocina", "Salón", "Coladuría"}; // Names of the rooms
 constexpr uint8_t MAX_PEERS = 10;                            // Maximum number of peers
 
 constexpr const uint32_t WEB_SERVER_PERIOD = 300;             // Web server update period in ms
@@ -57,7 +58,7 @@ constexpr uint8_t LD2410_PIN = 14;                   // GPIO pin for LD2410 sens
 constexpr uint8_t MAXIMUM_MOVING_DISTANCE_GATE = 8;  // Maximum moving distance for gate activation
 constexpr uint8_t MAXIMUM_STILL_DISTANCE_GATE = 8;   // Maximum still distance for gate activation
 constexpr uint8_t UNMANNED_DURATION_S = 60;          // Duration in seconds before marking as unmanned
-constexpr uint8_t SENSITIVITY = 90;                  // Sensitivity level for motion detection
+constexpr uint8_t SENSITIVITY = 100;                  // Sensitivity level for motion detection
 
 constexpr uint8_t MAX_PEERS = 1;                     // Maximum number of peers
 constexpr unsigned long ACK_TIMEOUT_MS = 5000;       // Acknowledgment timeout in ms
