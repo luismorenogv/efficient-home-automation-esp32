@@ -46,11 +46,15 @@ struct ControlData {
     uint8_t mac_addr[MAC_ADDRESS_LENGTH];
     Time cold;
     Time warm;
+    Time new_cold;
+    Time new_warm;
+    bool lights_on;
     bool pending_update;
     uint32_t latest_heartbeat;
 
     ControlData() 
-        : registered(false), pending_update(false), latest_heartbeat(millis()) 
+        : registered(false), pending_update(false), latest_heartbeat(millis()),
+        new_cold({0, 0}), new_warm({0, 0}), lights_on(false) 
     {
         memset(mac_addr, 0, sizeof(mac_addr));
         memset(&cold, 0, sizeof(cold));
@@ -85,7 +89,7 @@ public:
     void sensorSetup(uint8_t room_id, const uint8_t* mac_addr, uint32_t sleep_period_ms);
 
     // Sets up control data for a room
-    void controlSetup(uint8_t room_id, const uint8_t* mac_addr, 
+    void controlSetup(uint8_t room_id, const uint8_t* mac_addr, bool lights_on,
                      uint8_t warm_hour, uint8_t warm_min, 
                      uint8_t cold_hour, uint8_t cold_min);
     
@@ -128,6 +132,9 @@ public:
 
     // Returns false if latest message from the sensor has expired (>sleep_period)
     bool checkIfSensorActive(uint8_t room_id);
+
+    // Sets new lights state
+    void setLightsOn(uint8_t room_id, bool on);
 
 private:
     RoomData rooms[NUM_ROOMS];

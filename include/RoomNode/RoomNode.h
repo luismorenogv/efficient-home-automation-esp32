@@ -43,6 +43,9 @@ private:
     uint8_t wifi_channel;
     uint8_t room_id;
     bool connected;
+    bool user_stop;
+    Time cold;
+    Time warm;
 
     QueueHandle_t espnowQueue;
     QueueHandle_t presenceQueue;
