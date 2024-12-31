@@ -1,63 +1,90 @@
+/* Base styling */
+
 body {
     font-family: Arial, sans-serif;
-    text-align: center;
     background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
 }
 
+/* Center the main title and add some spacing */
 h1 {
+    text-align: center;
     margin-top: 20px;
+    margin-bottom: 20px;
 }
 
+/* 
+   Using grid for #sensor-data to allow room-boxes to flow and wrap nicely. 
+   - On large screens, multiple boxes can appear side by side
+   - On small screens, they naturally shrink to single column 
+*/
 #sensor-data {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-gap: 20px;
+    padding: 0 20px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
+/* 
+   Each room-box is now limited to a comfortable width (e.g., 500px). 
+   It will occupy full width on smaller devices but not exceed 500px on larger ones.
+*/
 .room-box {
-    width: 80%;
+    max-width: 500px;
+    width: 100%;
     background-color: #ffffff;
     padding: 15px;
-    margin: 10px 0;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     text-align: left;
 }
 
 .room-box h2 {
+    margin-top: 0;
     margin-bottom: 10px;
+}
+
+.room-box p {
+    margin: 6px 0;
 }
 
 .room-box button {
     padding: 5px 10px;
     font-size: 14px;
     cursor: pointer;
+    margin-top: 10px;
 }
 
-@media (max-width: 800px) {
+/* 
+   If you want to tweak how it looks on very narrow screens, 
+   you can use another media query.
+*/
+@media (max-width: 500px) {
     .room-box {
-        width: 95%;
+        margin: 0 auto 20px;
     }
 }
 
 /* Modal styling */
 .modal {
-    display: block; /* Hidden by default */
+    display: block; /* Hidden by default, set to block when invoked */
     position: fixed;
-    z-index: 1;
+    z-index: 1000; /* Ensure it appears on top of everything */
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    overflow: auto;
+    overflow: auto; /* Enable scroll if content exceeds view */
     background-color: rgba(0,0,0,0.4);
 }
 
-/* Adjust the modal content for better responsiveness */
+/* Center the modal content and make it responsive */
 .modal-content {
     background-color: #fefefe;
-    margin: 5% auto;
+    margin: 5% auto; 
     padding: 10px;
     border: 1px solid #888;
     width: 90%;
@@ -71,21 +98,12 @@ h1 {
     height: 400px !important;
 }
 
-/* Adjust close button positioning */
+/* Close button positioning */
 .close-button {
     color: #aaa;
     position: absolute;
     top: 10px;
     right: 20px;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-
-.close-button {
-    color: #aaa;
-    float: right;
     font-size: 28px;
     font-weight: bold;
     cursor: pointer;
@@ -98,3 +116,47 @@ h1 {
     cursor: pointer;
 }
 
+/* Toggle switch styling */
+.toggle-button {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 30px;
+    margin: 10px 0;
+}
+
+.toggle-button input {
+    display: none;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0;
+    background-color: #ccc;
+    transition: .3s;
+    border-radius: 30px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #2196F3;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(30px);
+}

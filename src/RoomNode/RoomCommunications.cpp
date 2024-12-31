@@ -27,9 +27,9 @@ void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg) {
         if (acked_msg == last_acked_msg) {
             ack_received = true;
             xSemaphoreGive(ackSemaphore);
-            LOG_INFO("ACK received from master");
+            LOG_INFO("ACK received from master for %s message", MSG_NAME[static_cast<uint8_t>(acked_msg)]);
         } else {
-            LOG_WARNING("ACK for incorrect message type.");
+            LOG_WARNING("ACK for incorrect message type (%s)", MSG_NAME[static_cast<uint8_t>(acked_msg)]);
         }
     } else {
         LOG_WARNING("ACK from invalid MAC address");

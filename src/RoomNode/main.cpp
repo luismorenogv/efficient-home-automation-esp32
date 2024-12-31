@@ -14,11 +14,6 @@ RoomNode room(ROOM_ID);
 void setup() {
     // Initializes room and tries to join the master network, then runs node logic
     room.initialize();
-    if(!room.joinNetwork()){
-        LOG_WARNING("No connection to Master. Sleeping 30min...");
-        esp_sleep_enable_timer_wakeup(30*60*1000000);
-        esp_deep_sleep_start();
-    }
     room.run();
 }
 

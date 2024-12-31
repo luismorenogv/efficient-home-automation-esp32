@@ -13,12 +13,14 @@
 
 constexpr uint8_t MAC_ADDRESS_LENGTH = 6;
 constexpr uint8_t MAX_WIFI_CHANNEL = 13;
-constexpr uint8_t TOTAL_FRAMES = 7;
+constexpr uint8_t TOTAL_FRAMES = 9;
 constexpr uint8_t ID_NOT_VALID = 255;
 
 // Names of message types for debugging
-const char* const MSG_NAME[TOTAL_FRAMES] = {
-    "JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA", "NEW_SLEEP_PERIOD", "NEW_SCHEDULE", "HEARTBEAT"
+constexpr const char* MSG_NAME[TOTAL_FRAMES] = {
+    "JOIN_SENSOR", "JOIN_ROOM", "ACK", "TEMP_HUMID_DATA",
+    "NEW_SLEEP_PERIOD", "NEW_SCHEDULE", "HEARTBEAT",
+    "LIGHTS_TOGGLE", "LIGHTS_UPDATE"
 };
 
 enum class MessageType : uint8_t {
@@ -28,7 +30,9 @@ enum class MessageType : uint8_t {
     TEMP_HUMID       = 0x03,
     NEW_SLEEP_PERIOD = 0x04,
     NEW_SCHEDULE     = 0x05,
-    HEARTBEAT        = 0x06
+    HEARTBEAT        = 0x06,
+    LIGHTS_TOGGLE    = 0x07,
+    LIGHTS_UPDATE    = 0x08
 };
 
 enum class NodeType : uint8_t {
@@ -81,6 +85,7 @@ struct JoinRoomMsg {
     uint8_t room_id;
     Time warm;
     Time cold;
+    bool lights_on;
 } __attribute__((packed));
 
 // Holds new schedule data
@@ -96,6 +101,18 @@ struct HeartbeatMsg {
     uint8_t room_id;
 } __attribute__((packed));
 
+// Holds update for lights state
+struct LightsUpdateMsg {
+    MessageType type = MessageType::LIGHTS_UPDATE;
+    bool is_on;
+} __attribute__((packed));
+
+// Hold new lights state
+struct LightsToggleMsg {
+    MessageType type = MessageType::LIGHTS_TOGGLE;
+    bool turn_on; // true para encender, false para apagar
+} __attribute__((packed));
+
 // Union of all message types
 union AllMessages {
     AckMsg ack;
@@ -105,6 +122,8 @@ union AllMessages {
     JoinRoomMsg join_room;
     NewScheduleMsg new_schedule;
     HeartbeatMsg heartbeat;
+    LightsUpdateMsg lights_update;
+    LightsToggleMsg lights_toggle;
 };
 
 #define MAX_MSG_SIZE sizeof(union AllMessages)

@@ -64,7 +64,8 @@ private:
     static void sleepPeriodChangedCallback(uint8_t room_id, uint32_t new_sleep_period_ms);
     static void scheduleChangedCallback(uint8_t room_id, uint8_t warm_hour, uint8_t warm_min, 
                                         uint8_t cold_hour, uint8_t cold_min);
-
+    static void lightsToggleCallback(uint8_t room_id, bool turn_on);
+    
     // Task functions
     static void espnowTask(void* pvParameter);
     static void webServerTask(void* pvParameter);
