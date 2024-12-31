@@ -173,7 +173,7 @@ bool CommunicationsBase::unregisterPeer(uint8_t* mac_address) {
 bool CommunicationsBase::sendMsg(uint8_t* mac_addr, const uint8_t* data, size_t size) {
     esp_err_t result = esp_now_send(mac_addr, data, size);
     if (result == ESP_OK) {
-        LOG_INFO("Message sent successfully to %02X:%02X:%02X:%02X:%02X:%02X\r\n",
+        LOG_INFO("%s message sent successfully to %02X:%02X:%02X:%02X:%02X:%02X\r\n", MSG_NAME[data[0]],
                       mac_addr[0], mac_addr[1], mac_addr[2],
                       mac_addr[3], mac_addr[4], mac_addr[5]);
         return true;

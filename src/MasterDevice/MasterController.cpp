@@ -9,7 +9,7 @@
 #include "MasterDevice/MasterController.h"
 
 // Singleton instance
-static MasterController* masterControllerInstance = nullptr;
+static MasterController* instance = nullptr;
 
 // Constants for retry mechanism
 constexpr uint8_t MAX_RETRIES = 3;
@@ -19,7 +19,7 @@ MasterController::MasterController()
     : communications(), 
       webSockets(dataManager) 
 {
-    masterControllerInstance = this;
+    instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
 }
 
@@ -43,95 +43,117 @@ void MasterController::initialize() {
     webSockets.initialize(webServer.getServer());
     webSockets.setSleepDurationCallback(MasterController::sleepPeriodChangedCallback);
     webSockets.setScheduleCallback(MasterController::scheduleChangedCallback);
+    webSockets.setLightsToggleCallback(MasterController::lightsToggleCallback);
     
     BaseType_t result;
 
     // Create ESP-NOW Task
-    result = xTaskCreatePinnedToCore(
-        espnowTask,
-        "ESP-NOW Task",
-        8192,
-        this,
-        2,
-        &espnowTaskHandle,
-        1
-    );
+    result = xTaskCreatePinnedToCore(espnowTask,"ESP-NOW Task",8192,this,2,&espnowTaskHandle,1);
     if (result != pdPASS) {
         LOG_ERROR("Failed to create ESP-NOW Task");
     }
 
     // Create Web Server Task
-    result = xTaskCreatePinnedToCore(
-        webServerTask,
-        "Web Server Task",
-        8192,
-        this,
-        2,
-        &webServerTaskHandle,
-        0
-    );
+    result = xTaskCreatePinnedToCore(webServerTask,"Web Server Task",8192,this,2,&webServerTaskHandle,0);
     if (result != pdPASS) {
         LOG_ERROR("Failed to create Web Server Task");
     }
 
     // Create NTP Sync Task
-    result = xTaskCreatePinnedToCore(
-        ntpSyncTask,
-        "NTP Sync Task",
-        8192,
-        this,
-        1,
-        &ntpSyncTaskHandle,
-        1
-    );
+    result = xTaskCreatePinnedToCore(ntpSyncTask,"NTP Sync Task",8192,this,1,&ntpSyncTaskHandle,1);
     if (result != pdPASS) {
         LOG_ERROR("Failed to create NTP Sync Task");
     }
 
     // Create Update Check Task
-    result = xTaskCreatePinnedToCore(
-        updateCheckTask,
-        "Update Check Task",
-        8192,
-        this,
-        1,
-        nullptr,
-        1
-    );
+    result = xTaskCreatePinnedToCore(updateCheckTask,"Update Check Task",8192,this,1,nullptr,1);
     if (result != pdPASS) {
         LOG_ERROR("Failed to create Update Check Task");
     }
 }
 
 void MasterController::sleepPeriodChangedCallback(uint8_t room_id, uint32_t new_sleep_period_ms) {
-    if (masterControllerInstance) {
+    if (instance) {
         LOG_INFO("Received new sleep period for room %u: %u ms", room_id, new_sleep_period_ms);
-        masterControllerInstance->dataManager.setNewSleepPeriod(room_id, new_sleep_period_ms);
+        instance->dataManager.setNewSleepPeriod(room_id, new_sleep_period_ms);
     }
 }
 
 void MasterController::scheduleChangedCallback(uint8_t room_id, uint8_t warm_hour, uint8_t warm_min, uint8_t cold_hour, uint8_t cold_min) {
-    if (masterControllerInstance) {
+    if (instance) {
         LOG_INFO("Received new schedule for room %u: Warm=%02u:%02u, Cold=%02u:%02u", 
                       room_id, warm_hour, warm_min, cold_hour, cold_min);
-        masterControllerInstance->dataManager.setNewSchedule(room_id, warm_hour, warm_min, cold_hour, cold_min);
+        instance->dataManager.setNewSchedule(room_id, warm_hour, warm_min, cold_hour, cold_min);
+        NewScheduleMsg scheduleMsg;
+        scheduleMsg.type = MessageType::NEW_SCHEDULE;
+        scheduleMsg.warm = {warm_hour, warm_min};
+        scheduleMsg.cold = {cold_hour, cold_min};
+        uint8_t dest_mac[MAC_ADDRESS_LENGTH];
+        if(instance->dataManager.getMacAddr(room_id, NodeType::ROOM, dest_mac)){
+            instance->communications.sendMsg(dest_mac, reinterpret_cast<uint8_t*>(&scheduleMsg), sizeof(scheduleMsg));
+            LOG_INFO("Sent NEW_SCHEDULE to room %u", 
+                        room_id);
+            instance->pendingScheduleUpdate[room_id].attempts++;
+            instance->pendingScheduleUpdate[room_id].lastAttemptMillis = millis();;
+        } else {
+            LOG_ERROR("Failed to get MAC address for room %u. Cannot send NEW_SCHEDULE.", room_id);
+        }
+        
     }
 }
 
+void MasterController::lightsToggleCallback(uint8_t room_id, bool turn_on) {
+    if (instance) {
+        LightsToggleMsg toggleMsg;
+        toggleMsg.type = MessageType::LIGHTS_TOGGLE;
+        toggleMsg.turn_on = turn_on;
+
+        uint8_t room_mac[MAC_ADDRESS_LENGTH];
+        if (instance->dataManager.getMacAddr(room_id, NodeType::ROOM, room_mac)) {
+            instance->communications.sendMsg(room_mac, reinterpret_cast<uint8_t*>(&toggleMsg), sizeof(LightsToggleMsg));
+            LOG_INFO("Sent LIGHTS_TOGGLE to room %u: %s", room_id, turn_on ? "ON" : "OFF");
+        } else {
+            LOG_ERROR("Failed to get MAC address for room %u. Cannot toggle lights.", room_id);
+        }
+    }
+}
+
+// Handles incoming ESP-NOW messages from master
 void MasterController::espnowTask(void* pvParameter) {
     MasterController* self = static_cast<MasterController*>(pvParameter);
     IncomingMsg msg;
+    MessageType msg_type;
+
+    // Declare variables outside the loop to reduce stack usage
+    TempHumidMsg* payload_temp_humid = nullptr;
+    JoinSensorMsg* payload_join_sensor = nullptr;
+    AckMsg* payload_ack = nullptr;
+    JoinRoomMsg* payload_join_room = nullptr;
+    HeartbeatMsg* payload_heartbeat = nullptr;
+    LightsUpdateMsg* payload_lights_update = nullptr;
+    NewSleepPeriodMsg new_period_msg;
+    uint8_t room_id;
+    float temperature;
+    float humidity;
+    time_t timestamp;
+    uint32_t new_period;
+    uint8_t sensor_mac[MAC_ADDRESS_LENGTH];
+    bool is_on;
 
     while (true) {
         if (xQueueReceive(self->espnowQueue, &msg, portMAX_DELAY) == pdTRUE) {
-            MessageType msg_type = static_cast<MessageType>(msg.data[0]);
+            msg_type = static_cast<MessageType>(msg.data[0]);
             switch (msg_type) {
                 case MessageType::TEMP_HUMID: {
-                    TempHumidMsg* payload = reinterpret_cast<TempHumidMsg*>(msg.data);
-                    uint8_t room_id = payload->room_id;
-                    float temperature = payload->temperature;
-                    float humidity = payload->humidity;
-                    time_t timestamp = time(nullptr);
+                    if (msg.len != sizeof(TempHumidMsg)) {
+                        LOG_WARNING("Received malformed TEMP_HUMID message.");
+                        break;
+                    }
+                    payload_temp_humid = reinterpret_cast<TempHumidMsg*>(msg.data);
+                    room_id = payload_temp_humid->room_id;
+                    temperature = payload_temp_humid->temperature;
+                    humidity = payload_temp_humid->humidity;
+                    timestamp = time(nullptr);
                     
                     self->dataManager.addSensorData(room_id, temperature, humidity, timestamp);
 
@@ -140,13 +162,11 @@ void MasterController::espnowTask(void* pvParameter) {
 
                     // Handle pending sleep period update
                     if (self->dataManager.isPendingUpdate(room_id, NodeType::SENSOR)) {
-                        uint32_t new_period = self->dataManager.getNewSleepPeriod(room_id);
+                        new_period = self->dataManager.getNewSleepPeriod(room_id);
 
-                        NewSleepPeriodMsg new_period_msg;
                         new_period_msg.type = MessageType::NEW_SLEEP_PERIOD;
                         new_period_msg.new_period_ms = new_period;
 
-                        uint8_t sensor_mac[MAC_ADDRESS_LENGTH];
                         if (self->dataManager.getMacAddr(room_id, NodeType::SENSOR, sensor_mac)) {
                             self->communications.sendMsg(sensor_mac, reinterpret_cast<uint8_t*>(&new_period_msg), sizeof(NewSleepPeriodMsg));
                             LOG_INFO("Sent NEW_SLEEP_PERIOD to sensor in room %u successfully", room_id);
@@ -168,9 +188,13 @@ void MasterController::espnowTask(void* pvParameter) {
                 break;
 
                 case MessageType::JOIN_SENSOR: {
-                    JoinSensorMsg* payload = reinterpret_cast<JoinSensorMsg*>(msg.data);
-                    uint8_t room_id = payload->room_id;
-                    uint32_t sleep_period_ms = payload->sleep_period_ms;
+                    if (msg.len != sizeof(JoinSensorMsg)) {
+                        LOG_WARNING("Received malformed JOIN_SENSOR message.");
+                        break;
+                    }
+                    payload_join_sensor = reinterpret_cast<JoinSensorMsg*>(msg.data);
+                    room_id = payload_join_sensor->room_id;
+                    uint32_t sleep_period_ms = payload_join_sensor->sleep_period_ms;
                     
                     self->dataManager.sensorSetup(room_id, msg.mac_addr, sleep_period_ms);
 
@@ -185,40 +209,40 @@ void MasterController::espnowTask(void* pvParameter) {
                         LOG_WARNING("Received malformed ACK message.");
                         break;
                     }
-                    AckMsg* payload = reinterpret_cast<AckMsg*>(msg.data);
+                    payload_ack = reinterpret_cast<AckMsg*>(msg.data);
                     
-                    if (payload->acked_msg == MessageType::NEW_SLEEP_PERIOD) {
-                        uint8_t room_id = self->dataManager.getId(msg.mac_addr);
-                        if (room_id != ID_NOT_VALID) {
-                            self->dataManager.sleepPeriodWasUpdated(room_id);
-                            self->pendingSleepUpdate[room_id].attempts = 0;
-                            LOG_INFO("Received ACK for NEW_SLEEP_PERIOD from room %u", room_id);
-                        } else {
-                            LOG_WARNING("Received ACK for NEW_SLEEP_PERIOD from unknown SensorNode.");
-                        }
-                    } else if (payload->acked_msg == MessageType::NEW_SCHEDULE) {
-                        uint8_t room_id = self->dataManager.getId(msg.mac_addr);
-                        if (room_id != ID_NOT_VALID) {
-                            self->dataManager.scheduleWasUpdated(room_id);
-                            self->pendingScheduleUpdate[room_id].attempts = 0;
-                            LOG_INFO("Received ACK for NEW_SCHEDULE from room %u", room_id);
-                        } else {
-                            LOG_WARNING("Received ACK for NEW_SCHEDULE from unknown RoomNode.");
-                        }
+                    uint8_t acked_room_id = self->dataManager.getId(msg.mac_addr);
+                    if (acked_room_id == ID_NOT_VALID) {
+                        LOG_WARNING("Received ACK from unknown node.");
+                        break;
+                    }
+
+                    if (payload_ack->acked_msg == MessageType::NEW_SLEEP_PERIOD) {
+                        self->dataManager.sleepPeriodWasUpdated(acked_room_id);
+                        self->pendingSleepUpdate[acked_room_id].attempts = 0;
+                        LOG_INFO("Received ACK for NEW_SLEEP_PERIOD from room %u", acked_room_id);
+                    } else if (payload_ack->acked_msg == MessageType::NEW_SCHEDULE) {
+                        self->dataManager.scheduleWasUpdated(acked_room_id);
+                        self->pendingScheduleUpdate[acked_room_id].attempts = 0;
+                        LOG_INFO("Received ACK for NEW_SCHEDULE from room %u", acked_room_id);
                     } else {
-                        LOG_WARNING("Received ACK for unknown MessageType: %d", payload->acked_msg);
+                        LOG_WARNING("Received ACK for unknown MessageType: %d", payload_ack->acked_msg);
                     }
                 }
                 break;
 
                 case MessageType::JOIN_ROOM: {
-                    JoinRoomMsg* payload = reinterpret_cast<JoinRoomMsg*>(msg.data);
-                    uint8_t room_id = payload->room_id;
+                    if (msg.len != sizeof(JoinRoomMsg)) {
+                        LOG_WARNING("Received malformed JOIN_ROOM message.");
+                        break;
+                    }
+                    payload_join_room = reinterpret_cast<JoinRoomMsg*>(msg.data);
+                    room_id = payload_join_room->room_id;
                     self->communications.registerPeer(msg.mac_addr, WiFi.channel());
                     self->communications.sendAck(msg.mac_addr, MessageType::JOIN_ROOM);
-                    self->dataManager.controlSetup(room_id, msg.mac_addr, 
-                                                   payload->warm.hour, payload->warm.min, 
-                                                   payload->cold.hour, payload->cold.min);
+                    self->dataManager.controlSetup(room_id, msg.mac_addr, payload_join_room->lights_on, 
+                                                   payload_join_room->warm.hour, payload_join_room->warm.min, 
+                                                   payload_join_room->cold.hour, payload_join_room->cold.min);
                     LOG_INFO("Received JOIN_ROOM from room %u with warm/cold times", room_id);
 
                     // Update Web Interface
@@ -227,8 +251,12 @@ void MasterController::espnowTask(void* pvParameter) {
                 break;
 
                 case MessageType::HEARTBEAT: {
-                    HeartbeatMsg* payload = reinterpret_cast<HeartbeatMsg*>(msg.data);
-                    uint8_t room_id = payload->room_id;
+                    if (msg.len != sizeof(HeartbeatMsg)) {
+                        LOG_WARNING("Received malformed HEARTBEAT message.");
+                        break;
+                    }
+                    payload_heartbeat = reinterpret_cast<HeartbeatMsg*>(msg.data);
+                    room_id = payload_heartbeat->room_id;
                     if (self->dataManager.isRegistered(room_id, NodeType::ROOM)){
                         self->dataManager.updateHeartbeat(room_id);
                         self->communications.sendAck(msg.mac_addr, MessageType::HEARTBEAT);
@@ -236,6 +264,26 @@ void MasterController::espnowTask(void* pvParameter) {
                         LOG_WARNING("Heartbeat received from unregistered device");
                     }
                     
+                }
+                break;
+
+                case MessageType::LIGHTS_UPDATE: {
+                    if (msg.len != sizeof(LightsUpdateMsg)) {
+                        LOG_WARNING("Received malformed LIGHTS_UPDATE message.");
+                        break;
+                    }
+                    payload_lights_update = reinterpret_cast<LightsUpdateMsg*>(msg.data);
+                    room_id = self->dataManager.getId(msg.mac_addr);
+                    if (room_id != ID_NOT_VALID) {
+                        is_on = payload_lights_update->is_on;
+                        self->dataManager.setLightsOn(room_id, is_on);
+                        LOG_INFO("Room %u reports lights are now %s", room_id, is_on ? "ON" : "OFF");
+
+                        // Update Web Interface
+                        self->webSockets.sendDataUpdate(room_id);
+                    } else {
+                        LOG_WARNING("LIGHTS_UPDATE from unknown node");
+                    }
                 }
                 break;
 
@@ -286,8 +334,8 @@ void MasterController::checkAndResendUpdates() {
                     if (dataManager.getMacAddr(i, NodeType::ROOM, room_mac)) {
                         NewScheduleMsg scheduleMsg;
                         scheduleMsg.type = MessageType::NEW_SCHEDULE;
-                        scheduleMsg.warm = rd.control.warm;
-                        scheduleMsg.cold = rd.control.cold;
+                        scheduleMsg.warm = rd.control.new_warm;
+                        scheduleMsg.cold = rd.control.new_cold;
 
                         communications.sendMsg(room_mac, reinterpret_cast<uint8_t*>(&scheduleMsg), sizeof(scheduleMsg));
                         LOG_INFO("Resent NEW_SCHEDULE to room %u (attempt %u)", 

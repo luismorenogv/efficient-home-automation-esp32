@@ -22,6 +22,7 @@ constexpr const uint8_t* master_mac_addr = esp32s3_mac;
 /**************************************************************
  *                      Master Device                         *
  *************************************************************/
+
 #ifdef MODE_MASTER
 constexpr uint8_t NUM_ROOMS = 6;                             // Number of rooms managed
 constexpr uint16_t MAX_DATA_POINTS = 300;                    // Maximum sensor data points per room
@@ -36,11 +37,13 @@ constexpr const uint32_t CHECK_PENDING_MSG_PERIOD = 1000;     // Period to check
 constexpr const uint32_t HEARTBEAT_TIMEOUT = 4 * 60 * 1000;
 #endif
 
+
 /**************************************************************
  *                      Sensor Node                           *
  *************************************************************/
+
 #ifdef MODE_SENSOR
-constexpr uint8_t ROOM_ID = 1;                       // Identifier for the room (Unique for each SensorNode)
+constexpr uint8_t ROOM_ID = 3;                       // Identifier for the room (Unique for each SensorNode)
 
 constexpr unsigned long ACK_TIMEOUT_MS = 1000;       // Acknowledgment timeout in ms
 constexpr uint8_t MAX_RETRIES = 2;                   // Maximum number of retries for sending messages
@@ -61,7 +64,7 @@ constexpr uint8_t UNMANNED_DURATION_S = 60;          // Duration in seconds befo
 constexpr uint8_t SENSITIVITY = 100;                  // Sensitivity level for motion detection
 
 constexpr uint8_t MAX_PEERS = 1;                     // Maximum number of peers
-constexpr unsigned long ACK_TIMEOUT_MS = 5000;       // Acknowledgment timeout in ms
+constexpr unsigned long ACK_TIMEOUT_MS = 1000;       // Acknowledgment timeout in ms
 constexpr uint8_t MAX_RETRIES = 2;                   // Maximum number of retries for sending messages
 
 constexpr uint8_t DEFAULT_HOUR_COLD = 9;             // Default hour for cold mode activation

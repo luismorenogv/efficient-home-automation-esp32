@@ -30,6 +30,10 @@ void WebSockets::setSleepDurationCallback(void (*callback)(uint8_t, uint32_t)) {
 void WebSockets::setScheduleCallback(void (*callback)(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)) {
     scheduleCallback = callback;
 }
+void WebSockets::setLightsToggleCallback(void (*callback)(uint8_t, bool)) {
+    lightsToggleCallback = callback;
+}
+
 // Handles WebSocket events such as connections, disconnections, and incoming data
 void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                          void* arg, uint8_t* data, size_t len) {
@@ -81,7 +85,8 @@ void WebSockets::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, A
                         handleGetHistory(client, root);
                     } else if (action == "setSchedule") {
                         handleSetSchedule(client, root);
-
+                    } else if (action == "toggleLights") {
+                        handleToggleLights(client, root);
                     }
                 }
             }
@@ -228,9 +233,9 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
         obj["humidity"] = last_humid;
         obj["timestamp"] = last_ts;
         obj["sleep_period_ms"] = sleep_ms;
-        obj["registered"] = true;
+        obj["sensor_registered"] = true;
     } else{
-        obj["registered"] = false;
+        obj["sensor_registered"] = false;
     }
 
     // Include control data only if RoomNode is registered
@@ -243,6 +248,10 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
 
         obj["warm_time"] = warm_str;
         obj["cold_time"] = cold_str;
+        obj["lights_on"] = room.control.lights_on;
+        obj["control_registered"] = true;
+    } else {
+        obj["control_registered"] = false;
     }
 
     String jsonString;
@@ -294,6 +303,34 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
     String jsonString;
     serializeJson(doc, jsonString);
     client->text(jsonString);
+}
+
+
+void WebSockets::handleToggleLights(AsyncWebSocketClient* client, JsonObject& root) {
+    if (!root.containsKey("room_id") || !root.containsKey("turn_on")) {
+        LOG_ERROR("toggleLights action missing required fields.");
+        sendError(client, "Missing 'room_id' or 'turn_on' field");
+        return;
+    }
+
+    uint8_t room_id = root["room_id"];
+    bool turn_on = root["turn_on"];
+
+    // Check if RoomNode is registered
+    if (!dataManager.isRegistered(room_id, NodeType::ROOM)) {
+        LOG_WARNING("Room %u not registered, cannot toggle lights", room_id);
+        sendError(client, "Room not registered");
+        return;
+    }
+
+    // Invoke the callback to send LightsToggleMsg
+    if (lightsToggleCallback) {
+        lightsToggleCallback(room_id, turn_on);
+    } else {
+        LOG_ERROR("LightsToggleCallback not set");
+        sendError(client, "Internal error: callback not set");
+        return;
+    }
 }
 
 void WebSockets::sendError(AsyncWebSocketClient* client, const char* message) {

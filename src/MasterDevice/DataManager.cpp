@@ -78,9 +78,11 @@ bool DataManager::isPendingUpdate(uint8_t room_id, NodeType node_type) const {
 RoomData DataManager::getRoomData(uint8_t room_id) const {
     RoomData data;
     if (roomIdIsValid(room_id)){
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
         xSemaphoreTake(sensorMutex, portMAX_DELAY);
             data = rooms[room_id];
         xSemaphoreGive(sensorMutex);
+        xSemaphoreGive(controlMutex);
     }
     return data;
 }
@@ -129,10 +131,10 @@ void DataManager::setNewSchedule(uint8_t room_id, uint8_t warm_hour, uint8_t war
     if (roomIdIsValid(room_id)) {
         xSemaphoreTake(controlMutex, portMAX_DELAY);
             rooms[room_id].control.pending_update = true;
-            rooms[room_id].control.cold.hour = cold_hour;
-            rooms[room_id].control.cold.min = cold_min;
-            rooms[room_id].control.warm.hour = warm_hour;
-            rooms[room_id].control.warm.min = warm_min;
+            rooms[room_id].control.new_cold.hour = cold_hour;
+            rooms[room_id].control.new_cold.min = cold_min;
+            rooms[room_id].control.new_warm.hour = warm_hour;
+            rooms[room_id].control.new_warm.min = warm_min;
         xSemaphoreGive(controlMutex);
     }
 }
@@ -141,6 +143,8 @@ void DataManager::scheduleWasUpdated(uint8_t room_id) {
     if (roomIdIsValid(room_id)) {
         xSemaphoreTake(controlMutex, portMAX_DELAY);
             rooms[room_id].control.pending_update = false;
+            rooms[room_id].control.cold = rooms[room_id].control.new_cold;
+            rooms[room_id].control.warm = rooms[room_id].control.new_warm;
         xSemaphoreGive(controlMutex);
         LOG_INFO("Schedule was successfully updated");
     }
@@ -191,7 +195,7 @@ uint8_t DataManager::getId(uint8_t* mac_addr) const {
     return ID_NOT_VALID;
 }
 
-void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, uint8_t warm_hour, uint8_t warm_min, uint8_t cold_hour, uint8_t cold_min) {
+void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, bool lights_on, uint8_t warm_hour, uint8_t warm_min, uint8_t cold_hour, uint8_t cold_min) {
     if (roomIdIsValid(room_id)) {
         xSemaphoreTake(controlMutex, portMAX_DELAY);
             memcpy(rooms[room_id].control.mac_addr, mac_addr, MAC_ADDRESS_LENGTH);
@@ -199,6 +203,7 @@ void DataManager::controlSetup(uint8_t room_id, const uint8_t* mac_addr, uint8_t
             rooms[room_id].control.warm.min = warm_min;
             rooms[room_id].control.cold.hour = cold_hour;
             rooms[room_id].control.cold.min = cold_min;
+            rooms[room_id].control.lights_on = lights_on;
             rooms[room_id].control.registered = true; 
             rooms[room_id].control.pending_update = false; // No pending update initially
             rooms[room_id].control.latest_heartbeat = millis();
@@ -231,22 +236,29 @@ uint32_t DataManager::getLatestHeartbeat(uint8_t room_id){
 
 bool DataManager::isRegistered(uint8_t room_id, NodeType type){
     bool value = false;
-    xSemaphoreTake(controlMutex, portMAX_DELAY);
+    if (type == NodeType::NONE){
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
         xSemaphoreTake(sensorMutex, portMAX_DELAY);
-            if (type == NodeType::NONE){
-                value = rooms[room_id].isRegistered();
-            } else if (type == NodeType::ROOM){
-                value = rooms[room_id].control.registered;
-            } else if (type == NodeType::SENSOR){
-                value = rooms[room_id].sensor.registered;
-            } else {
-                LOG_WARNING("Unknown NodeType provided to isRegistered.");
-            }
+            value = rooms[room_id].isRegistered();
         xSemaphoreGive(sensorMutex);
-    xSemaphoreGive(controlMutex);
-
+        xSemaphoreGive(controlMutex);
+    }
+    else if (type == NodeType::ROOM){
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
+            value = rooms[room_id].control.registered;
+        xSemaphoreGive(controlMutex);
+    }
+    else if (type == NodeType::SENSOR){
+        xSemaphoreTake(sensorMutex, portMAX_DELAY);
+            value = rooms[room_id].sensor.registered;
+        xSemaphoreGive(sensorMutex);
+    }
+    else {
+        LOG_WARNING("Unknown NodeType provided to isRegistered.");
+    }
     return value;
 }
+
 
 void DataManager::unregisterNode(uint8_t room_id, NodeType type){
     if (type == NodeType::ROOM){
@@ -272,4 +284,12 @@ bool DataManager::checkIfSensorActive(uint8_t room_id){
         return false;
     }
     return true;
+}
+
+void DataManager::setLightsOn(uint8_t room_id, bool on) {
+    if (roomIdIsValid(room_id)) {
+        xSemaphoreTake(controlMutex, portMAX_DELAY);
+        rooms[room_id].control.lights_on = on;
+        xSemaphoreGive(controlMutex);
+    }
 }

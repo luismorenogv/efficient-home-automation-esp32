@@ -36,7 +36,10 @@ bool Lights::sendSignal(const char* command, const char* repeat) {
         // Successfully acquired the mutex
         transmit(command);
     for (int i = 0; i < NUM_REPEATS; i++) {
-        delayMicroseconds(PAUSE_MS);
+        uint8_t time_ms = PAUSE_US/1000;
+        uint8_t remaining_time_us = PAUSE_US % 1000;
+        vTaskDelay(pdMS_TO_TICKS(time_ms));
+        delayMicroseconds(remaining_time_us);
         transmit(repeat);
     }
         
@@ -103,6 +106,10 @@ CommandResult Lights::sendCommand(Command command) {
     if (command == Command::MORE_LIGHT || command == Command::ON){
         if(new_lux > initial_lux + LDR_MARGIN){
             result = CommandResult::POSITIVE;
+            if (command == Command::ON){
+                is_on = true;
+                LOG_INFO("Lights are ON");
+            }
         } else if (new_lux < initial_lux - LDR_MARGIN){
             result = CommandResult::NEGATIVE;
         } else{
@@ -111,6 +118,10 @@ CommandResult Lights::sendCommand(Command command) {
     } else if (command == Command::LESS_LIGHT || command == Command::OFF){
         if(new_lux < initial_lux - LDR_MARGIN){
             result = CommandResult::POSITIVE;
+            if (command == Command::OFF){
+                is_on = false;
+                LOG_INFO("Lights are OFF");
+            }
         } else if (new_lux > initial_lux + LDR_MARGIN){
             result = CommandResult::NEGATIVE;
         } else{
@@ -120,10 +131,8 @@ CommandResult Lights::sendCommand(Command command) {
         // Color change command is assumed as positive
         result = CommandResult::POSITIVE;
     }
-    if (result == CommandResult::POSITIVE){
-        is_on = true;
-    }
     LOG_INFO("Command %s resulted %s", COMMAND_NAMES[static_cast<uint8_t>(command)], RESULT_NAMES[static_cast<uint8_t>(result)]);
+    return result;
 }
 
 
@@ -221,7 +230,6 @@ bool Lights::isEnoughLight(uint8_t ldr_pin){
     uint16_t current_lux = readLDR(ldr_pin);
     LOG_INFO("Current light: %u", current_lux);
     if (current_lux >= DARK_THRESHOLD){
-        LOG_INFO("enough");
         return true;
     }
     return false;

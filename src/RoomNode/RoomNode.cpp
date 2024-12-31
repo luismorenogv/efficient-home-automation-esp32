@@ -11,7 +11,8 @@
 RoomNode* RoomNode::instance = nullptr;
 
 RoomNode::RoomNode(uint8_t room_id)
-    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner(), espnowTaskHandle(NULL) {
+    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner(),
+    espnowTaskHandle(NULL), user_stop(false), connected(false), cold({DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD}), warm({DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM}) {
     instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
@@ -34,6 +35,10 @@ void RoomNode::initialize() {
     ntpClient.initialize();
     WiFi.disconnect(); 
 
+    if(!joinNetwork()){
+        LOG_WARNING("No initial connection to Master. RommNode will trying conneting through execution");
+    }
+
     // Set initial mode based on current time
     time_t now = time(nullptr);
     struct tm timeinfo;
@@ -47,8 +52,6 @@ void RoomNode::initialize() {
     }
 
     // Set default warm/cold schedules
-    Time warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
-    Time cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
     lights.setSchedule(warm, cold);
 }
 
@@ -58,8 +61,9 @@ bool RoomNode::joinNetwork() {
 
     JoinRoomMsg msg;
     msg.room_id = room_id;
-    msg.cold = {DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD};
-    msg.warm = {DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM};
+    msg.cold = cold;
+    msg.warm = warm;
+    msg.lights_on = lights.isOn();
 
     // If espNowTask has not been created already
     if (espnowTaskHandle == NULL){
@@ -125,10 +129,20 @@ void RoomNode::run() {
 void RoomNode::espnowTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
     IncomingMsg msg;
+    MessageType msg_type;
+
+    // Declare variables outside the loop to minimize stack usage
+    AckMsg* ack_payload = nullptr;
+    NewScheduleMsg* schedule_payload = nullptr;
+    LightsToggleMsg* toggle_payload = nullptr;
+    LightsUpdateMsg lights_update;
+    uint8_t presence_state;
+    bool turn_on;
 
     while (true) {
         if (xQueueReceive(self->espnowQueue, &msg, portMAX_DELAY) == pdTRUE) {
-            MessageType msg_type = static_cast<MessageType>(msg.data[0]);
+            msg_type = static_cast<MessageType>(msg.data[0]);
+
             switch (msg_type) {
                 case MessageType::ACK:
                     {
@@ -136,39 +150,96 @@ void RoomNode::espnowTask(void* pvParameter) {
                             LOG_WARNING("Invalid ACK length.");
                             break;
                         }
-                        AckMsg* payload = reinterpret_cast<AckMsg*>(msg.data);
-                        self->communications.ackReceived(msg.mac_addr, payload->acked_msg);
+                        ack_payload = reinterpret_cast<AckMsg*>(msg.data);
+                        self->communications.ackReceived(msg.mac_addr, ack_payload->acked_msg);
                     }
                     break;
+
                 case MessageType::NEW_SCHEDULE:
                     {
                         if (msg.len != sizeof(NewScheduleMsg)) {
                             LOG_WARNING("Invalid NEW_SCHEDULE length.");
                             break;
                         }
-                        NewScheduleMsg* payload = reinterpret_cast<NewScheduleMsg*>(msg.data);
-                        self->lights.setSchedule(payload->warm, payload->cold);
+                        if (!self->connected){
+                            LOG_WARNING("NEW_SCHEDULE message is not expected");
+                            break;
+                        }
+                        schedule_payload = reinterpret_cast<NewScheduleMsg*>(msg.data);
+                        self->lights.setSchedule(schedule_payload->warm, schedule_payload->cold);
                         self->communications.sendAck(master_mac_addr, MessageType::NEW_SCHEDULE);
                     }
                     break;
+
+                case MessageType::LIGHTS_TOGGLE:
+                    {
+                        if (msg.len != sizeof(LightsToggleMsg)) {
+                            LOG_WARNING("Invalid LIGHTS_TOGGLE length.");
+                            break;
+                        }
+                        if (!self->connected){
+                            LOG_WARNING("LIGHTS_TOGGLE message is not expected");
+                            break;
+                        }
+                        toggle_payload = reinterpret_cast<LightsToggleMsg*>(msg.data);
+                        turn_on = toggle_payload->turn_on;
+
+                        if (turn_on) {
+                            if (self->lights.isOn()) {
+                                LOG_INFO("Lights are already ON");
+                            } else {
+                                LOG_INFO("Turning lights ON");
+                                presence_state = digitalRead(LD2410_PIN);
+                                if (presence_state == HIGH){
+                                    self->lights.sendCommand(Command::ON);
+                                } else {
+                                    // presenceTask will turn on the lights if presence is detected
+                                    LOG_INFO("Presence not detected. Lights turn on ignored.");
+                                }
+                            }
+                            self->user_stop = false;
+                        } else {
+                            if (!self->lights.isOn()) {
+                                LOG_INFO("Lights are already OFF");
+                            } else {
+                                LOG_INFO("Turning lights OFF");
+                                self->lights.sendCommand(Command::OFF);
+                            }
+                            self->user_stop = true;
+                        }
+
+                        lights_update.is_on = self->lights.isOn();
+                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
+                    }
+                    break;
+
                 default:
                     LOG_WARNING("Unknown message type: %d", msg_type);
             }
+            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            LOG_INFO("espNowTask: Stack watermark = %u", (unsigned)watermark);
+
         }
     }
 }
+
 
 // Periodically checks and updates lights mode/brightness
 void RoomNode::lightsControlTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
     bool lights_on = false;
+    time_t now;
+    uint16_t current_minutes;
 
     while (true) {
+        while(self->user_stop){
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
         if (self->lights.isOn()){
-            time_t now = time(nullptr);
+            now = time(nullptr);
             struct tm timeinfo;
             localtime_r(&now, &timeinfo);
-            uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
+            current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
             // Initialize mode each time the lights are turned on
             if (!lights_on){
                 self->lights.initializeMode(current_minutes);
@@ -181,6 +252,9 @@ void RoomNode::lightsControlTask(void* pvParameter) {
         } else {
             lights_on = false;
         }
+        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        LOG_INFO("lightsControlTask: Stack watermark = %u", (unsigned)watermark);
+
         vTaskDelay(pdMS_TO_TICKS(LIGHTS_CONTROL_PERIOD));
     }
 }
@@ -189,32 +263,38 @@ void RoomNode::lightsControlTask(void* pvParameter) {
 void RoomNode::presenceTask(void* pvParameter) {
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
     bool previous_presence = false; // Set initially to false as lights are off initially
+    uint8_t presence_state;
+    bool new_presence;
+    CommandResult result;
+    LightsUpdateMsg lights_update;
     self->presenceSensor.setQueue(self->presenceQueue);
     self->presenceSensor.start();
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for sensor to stabilize
     while (true) {
-        uint8_t presence_state;
         if (xQueueReceive(self->presenceQueue, &presence_state, portMAX_DELAY) == pdTRUE) {
-            bool new_presence = (presence_state == HIGH);
+            if (self->user_stop) {
+                // Discart event avoiding queue overflow
+                continue;
+            }
+
+            new_presence = (presence_state == HIGH);
             if (new_presence && !previous_presence) {
                 LOG_INFO("Presence detected.");
-                if (self->lights.isEnoughLight(LDR_PIN)){
-                    LOG_INFO("Lights are not necessary --> Enough natural light");
-                }
-                else{
-                    if (self->lights.isOn()){
-                        LOG_INFO("Lights are already ON");
-                    } else{
-                        LOG_INFO("Turning lights ON");
-                        CommandResult result = self->lights.sendCommand(Command::ON);
-                        if(result == CommandResult::UNCLEAR){
-                            LOG_INFO("Lights are unavailable");
-                            continue;
-                        } else if (result == CommandResult::NEGATIVE){
-                            LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
-                            self->lights.sendCommand(Command::ON);
-                        } else {
-                            LOG_INFO("Lights succesfully turned ON");
-                        }
+                if (self->lights.isOn()){
+                    LOG_INFO("Lights are already ON");
+                } else{
+                    LOG_INFO("Turning lights ON");
+                    result = self->lights.sendCommand(Command::ON);
+                    if(result == CommandResult::UNCLEAR){
+                        LOG_INFO("Lights are unavailable");
+                        continue;
+                    } else if (result == CommandResult::NEGATIVE){
+                        LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
+                        self->lights.sendCommand(Command::ON);
+                    } else {
+                        lights_update.is_on = true;
+                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
+                        LOG_INFO("Lights succesfully turned ON");
                     }
                 }
                 
@@ -224,7 +304,7 @@ void RoomNode::presenceTask(void* pvParameter) {
                 if(!self->lights.isOn()){
                     LOG_INFO("Lights are already OFF");
                 } else{
-                    CommandResult result = self->lights.sendCommand(Command::OFF);
+                    result = self->lights.sendCommand(Command::OFF);
                     if(result == CommandResult::UNCLEAR){
                         LOG_INFO("Lights are unavailable");
                         continue;
@@ -233,10 +313,15 @@ void RoomNode::presenceTask(void* pvParameter) {
                         self->lights.sendCommand(Command::OFF);
                     } else{
                         LOG_INFO("Lights succesfully turned OFF");
+                        lights_update.is_on = false;
+                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
                     }
                 }
             }
             previous_presence = new_presence;
+            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            LOG_INFO("presenceTask: Stack watermark = %u", (unsigned)watermark);
+
         }
     }
 }
@@ -261,17 +346,20 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
         WiFi.disconnect();
         LOG_INFO("WiFi disconnected after NTP sync");
         esp_wifi_set_channel(self->wifi_channel, WIFI_SECOND_CHAN_NONE); // Set WiFi channel back to master's channel
+        
+        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        LOG_INFO("NTPSyncTask: Stack watermark = %u", (unsigned)watermark);
+
     }
 }
 
 void RoomNode::heartbeatTask(void* pvParameter){
     RoomNode* self = static_cast<RoomNode*>(pvParameter);
-
+    HeartbeatMsg msg;
     while (true)
     {
         vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_PERIOD));
         if (self->connected){
-            HeartbeatMsg msg;
             msg.room_id = self->room_id;
             self->communications.sendMsg(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
             if (!self->communications.waitForAck(MessageType::HEARTBEAT, self->HEARTBEAT_TIMEOUT)){
@@ -287,6 +375,8 @@ void RoomNode::heartbeatTask(void* pvParameter){
                 LOG_WARNING("Unable to reconnect to the network");
             }
         }
+        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        LOG_INFO("heartbeatTask: Stack watermark = %u", (unsigned)watermark);
     }
     
 }
