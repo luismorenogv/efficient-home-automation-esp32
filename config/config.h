@@ -57,11 +57,15 @@ constexpr uint8_t MAX_PEERS = 1;                     // Maximum number of peers
 #ifdef MODE_ROOM
 constexpr uint8_t ROOM_ID = 0;                       // Identifier for the room (Unique for each RoomNode)
 
+// Define I2C pins for TSL2591
+constexpr uint8_t I2C_SDA_PIN = 21;                   // GPIO21 for SDA
+constexpr uint8_t I2C_SCL_PIN = 22;                   // GPIO22 for SCL
+
 constexpr uint8_t LD2410_PIN = 14;                   // GPIO pin for LD2410 sensor
 constexpr uint8_t MAXIMUM_MOVING_DISTANCE_GATE = 8;  // Maximum moving distance for gate activation
 constexpr uint8_t MAXIMUM_STILL_DISTANCE_GATE = 8;   // Maximum still distance for gate activation
 constexpr uint8_t UNMANNED_DURATION_S = 60;          // Duration in seconds before marking as unmanned
-constexpr uint8_t SENSITIVITY = 100;                  // Sensitivity level for motion detection
+constexpr uint8_t SENSITIVITY = 100;                 // Sensitivity level for motion detection
 
 constexpr uint8_t MAX_PEERS = 1;                     // Maximum number of peers
 constexpr unsigned long ACK_TIMEOUT_MS = 1000;       // Acknowledgment timeout in ms
@@ -76,7 +80,6 @@ constexpr uint32_t LIGHTS_CONTROL_PERIOD = 1000;      // Lights control update p
 constexpr uint32_t NTPSYNC_PERIOD = 5 * 60 * 1000;    // NTP synchronization period
 constexpr uint32_t HEARTBEAT_PERIOD = 2 * 60 * 1000;  // Heartbeat msg sending period
 
-constexpr uint8_t LDR_PIN = 33;                       // GPIO pin for Light Dependent Resistor
 constexpr uint8_t IR_LED_PIN = 15;                    // GPIO pin for IR LED
 constexpr uint8_t TRANSMITTER_PIN = 13;               // GPIO pin for transmitter
 #endif
