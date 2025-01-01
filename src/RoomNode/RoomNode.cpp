@@ -46,7 +46,7 @@ void RoomNode::initialize() {
     uint16_t current_minutes = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
     // Initialize lights state and mode
-    if(!lights.initializeState(LDR_PIN)){
+    if(!lights.initializeState()){
         LOG_ERROR("Lights init failed.");
         tryLater();
     }
@@ -247,7 +247,7 @@ void RoomNode::lightsControlTask(void* pvParameter) {
             } else {
                 self->lights.checkAndUpdateMode(current_minutes);
             }
-            self->lights.adjustBrightness(LDR_PIN);
+            self->lights.adjustBrightness();
             
         } else {
             lights_on = false;
