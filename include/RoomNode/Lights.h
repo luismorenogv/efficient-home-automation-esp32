@@ -7,10 +7,13 @@
  */
 
 #pragma once
+
 #include <Arduino.h>
+#include <Adafruit_TSL2591.h>
 #include "config.h"
 #include "Common/common.h"
 
+// 433MHz bit sequences for sending commands
 constexpr const char Light[] = "10001011100010111000101110111011100010111011100010111011100010001000101110111011100010111011100010001000100010111011101110111";
 constexpr const char LightRepeat[] = "100010001011100010111000101110111011100010111011100010111011100010001000101110111011100010111011100010001000100010111011101110111";
 
@@ -29,6 +32,7 @@ constexpr const char BlueRepeat[] = "1011101110111011100010001011100010111000101
 constexpr const char* COMMAND_NAMES[] = {"ON", "OFF", "MORE_LIGHT", "LESS_LIGHT", "BLUE", "YELLOW"};
 constexpr const char* RESULT_NAMES[] = {"POSITIVE", "UNCLEAR", "NEGATIVE"};
 
+// Commands for lights
 enum class Command : uint8_t {
     ON,
     OFF,
@@ -38,6 +42,7 @@ enum class Command : uint8_t {
     YELLOW,
 };
 
+// Possible results after verifying a command
 enum class CommandResult : uint8_t {
     POSITIVE,
     UNCLEAR,
@@ -50,10 +55,10 @@ public:
     Lights(const Lights&) = delete;
     Lights& operator=(const Lights&) = delete;
 
-    // Determines initial on/off state using LDR readings
-    bool initializeState(uint8_t ldr_pin);
+    // Determines initial on/off state using TSL2591 readings
+    bool initializeState();
 
-    // Sends a command and verifies its effect using LDR
+    // Sends a command and verifies its effect using TSL2591
     CommandResult sendCommand(Command command);
 
     // Checks if lights are currently on
@@ -69,34 +74,37 @@ public:
     void checkAndUpdateMode(uint16_t current_minutes);
 
     // Adjusts brightness within thresholds using MORE/LESS commands
-    void adjustBrightness(uint8_t ldr_pin);
+    void adjustBrightness();
 
-    // Check if there is enough light
-    bool isEnoughLight(uint8_t ldr_pin);
+    // Check if there is enough ambient light
+    bool isEnoughLight();
 
 private:
-    const uint8_t MAX_INIT_RETRIES = 3;
-    const uint16_t DIGIT_DURATION = 350; // µs per bit
-    const uint16_t PAUSE_US = 8850;      // µs between repeats
-    const uint8_t NUM_REPEATS = 5;
-    const uint8_t MAX_FAILURES = 2;
-    const uint16_t LDR_MARGIN = 20;
-    const uint16_t VERIFY_DELAY_MS = 1000;
-    const uint16_t DARK_THRESHOLD = 2000;
-    const uint16_t BRIGHT_THRESHOLD = 4000;
-    const uint8_t MAX_TRANSMIT_RETRIES = 3;
+    // Transmission parameters
+    const uint8_t  MAX_INIT_RETRIES      = 3;
+    const uint16_t DIGIT_DURATION        = 350;   // µs per bit
+    const uint16_t PAUSE_US              = 8850;  // µs between repeats
+    const uint8_t  NUM_REPEATS            = 5;
+    const uint8_t  MAX_FAILURES           = 2;
+    const float    LUX_MARGIN            = 20.0f; // Lux margin for verification
+    const uint16_t VERIFY_DELAY_MS        = 1000;  // ms delay after command
+    const float    DARK_THRESHOLD         = 50.0f; // Lux below which it's considered dark
+    const float    BRIGHT_THRESHOLD       = 500.0f; // Lux above which it's considered bright
+    const uint8_t  MAX_TRANSMIT_RETRIES   = 3;
+    
 
-    bool is_on; 
-    uint8_t transmitter_pin;
+    bool    is_on; 
+    bool    warm_mode;
     Time warm;
     Time cold;
-    bool warm_mode;
-
-    bool max_brightness;
-    bool min_brightness;
+    bool    max_brightness;
+    bool    min_brightness;
 
     // Mutex to protect RF transmitter
     SemaphoreHandle_t transmitterMutex;
+
+    // TSL2591 sensor object
+    Adafruit_TSL2591 tsl;
 
     // Sends a bit sequence to transmitter
     void transmit(const char *bits);
@@ -104,11 +112,14 @@ private:
     // Sends a command with repeats
     bool sendSignal(const char *command, const char *repeat);
 
-    // Reads LDR value
-    uint16_t readLDR(uint8_t ldr_pin);
-
     // Sends a specific command (ON, OFF, MORE_LIGHT, etc.)
     bool send(Command command);
+
+    // Initializes the TSL2591 sensor
+    bool initTSL2591();
+
+    // Gets a lux reading from TSL2591
+    float getLuxValue();
 
     // Determines if current time falls into warm or cold mode
     bool determineMode(uint16_t current_minutes) const;
