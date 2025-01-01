@@ -16,7 +16,7 @@
 /**************************************************************
  *                         Common                             *
  *************************************************************/
-constexpr unsigned long DEFAULT_SLEEP_DURATION = 300000; // 5 minutes by default
+constexpr unsigned long DEFAULT_SLEEP_DURATION = 900000; // 15 minutes by default
 constexpr const uint8_t* master_mac_addr = esp32s3_mac;
 
 /**************************************************************
