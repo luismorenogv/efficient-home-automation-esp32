@@ -8,8 +8,8 @@
 
 #include "RoomNode/RoomCommunications.h"
 
-RoomCommunications::RoomCommunications()
-    : ack_received(false), last_acked_msg(MessageType::ACK), CommunicationsBase() {
+RoomCommunications::RoomCommunications(SemaphoreHandle_t* radioMutex)
+    : ack_received(false), last_acked_msg(MessageType::ACK), CommunicationsBase(), radioMutex(radioMutex) {
     instance = this;
     ackSemaphore = xSemaphoreCreateBinary();
 }
@@ -37,12 +37,14 @@ void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg) {
 }
 
 // Sends data to the master (assumes only one peer)
-void RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
+bool RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
     if (numPeers > 0) {
-        CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
-    } else {
-        LOG_WARNING("No peers registered.");
+        xSemaphoreTake(*radioMutex, portMAX_DELAY);
+            return CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
+        xSemaphoreGive(*radioMutex);
     }
+    LOG_WARNING("No peers registered.");
+    return false;
 }
 
 // Handles received data by enqueuing it for processing

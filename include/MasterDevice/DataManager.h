@@ -138,8 +138,8 @@ public:
 
 private:
     RoomData rooms[NUM_ROOMS];
-    mutable SemaphoreHandle_t sensorMutex;
-    mutable SemaphoreHandle_t controlMutex;
+    SemaphoreHandle_t sensorMutex;
+    SemaphoreHandle_t controlMutex;
 
     // Validates the room ID
     bool roomIdIsValid(uint8_t room_id) const;

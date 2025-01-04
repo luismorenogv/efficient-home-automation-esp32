@@ -91,6 +91,7 @@ private:
     const float    DARK_THRESHOLD         = 50.0f; // Lux below which it's considered dark
     const float    BRIGHT_THRESHOLD       = 500.0f; // Lux above which it's considered bright
     const uint8_t  MAX_TRANSMIT_RETRIES   = 3;
+    const uint8_t  COMMAND_REPEATS = 2;
     
 
     bool    is_on; 

@@ -13,7 +13,7 @@
 
 class RoomCommunications : public CommunicationsBase {
 public:
-    RoomCommunications();
+    RoomCommunications(SemaphoreHandle_t* radioMutex);
 
     // Waits for an ACK of a given type or times out
     bool waitForAck(MessageType expected_ack, unsigned long timeout_ms);
@@ -22,7 +22,7 @@ public:
     void ackReceived(uint8_t *mac_addr, MessageType acked_msg);
 
     // Sends a message to the master (assumes one peer)
-    void sendMsg(const uint8_t *data, size_t size);
+    bool sendMsg(const uint8_t *data, size_t size);
 
 private:
     void onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) override;
@@ -31,4 +31,5 @@ private:
     volatile bool ack_received;
     MessageType last_acked_msg;
     SemaphoreHandle_t ackSemaphore;
+    SemaphoreHandle_t* radioMutex;
 };
