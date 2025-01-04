@@ -56,6 +56,8 @@ private:
     TaskHandle_t NTPSyncTaskHandle;
     TaskHandle_t HeartBeatTaskHandle;
 
+    SemaphoreHandle_t radioMutex;
+
     // Task functions
     static void espnowTask(void* pvParameter);
     static void lightsControlTask(void* pvParameter);
