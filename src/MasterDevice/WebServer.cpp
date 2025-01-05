@@ -7,15 +7,14 @@
  */
 
 #include "MasterDevice/WebServer.h"
-#include <SPIFFS.h>
 
 WebServer::WebServer() : server(80) {
 }
 
 void WebServer::initialize() {
-    // Initialize SPIFFS
-    if (!SPIFFS.begin(true)) {
-        LOG_ERROR("Failed to mount SPIFFS");
+    // Initialize LittleFS
+    if (!LittleFS.begin(true)) {
+        LOG_ERROR("Failed to mount LittleFS");
         return;
     }
     setupRoutes();
@@ -24,22 +23,22 @@ void WebServer::initialize() {
 void WebServer::setupRoutes() {
     // Serve index.html at root
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(SPIFFS, "/index.html", "text/html");
+        request->send(LittleFS, "/index.html", "text/html");
     });
 
     // Serve style.css
     server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(SPIFFS, "/style.css", "text/css");
+        request->send(LittleFS, "/style.css", "text/css");
     });
 
     // Serve script.js
     server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(SPIFFS, "/script.js", "application/javascript");
+        request->send(LittleFS, "/script.js", "application/javascript");
     });
 
     // Serve favicon.png
     server.on("/favicon.png", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(SPIFFS, "/favicon.png", "image/png");
+        request->send(LittleFS, "/favicon.png", "image/png");
     });
 }
 

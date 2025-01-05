@@ -9,6 +9,7 @@
 #pragma once
 
 #include <ESPAsyncWebServer.h>
+#include <LittleFS.h>
 #include "config.h"
 
 // Class to manage the asynchronous web server
