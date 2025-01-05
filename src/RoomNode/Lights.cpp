@@ -128,7 +128,7 @@ CommandResult Lights::sendCommand(Command command) {
         }
 
         LOG_INFO("Command %s resulted %s", COMMAND_NAMES[static_cast<uint8_t>(command)], RESULT_NAMES[static_cast<uint8_t>(result)]);
-        if (result == CommandResult::POSITIVE){
+        if (result == CommandResult::POSITIVE || result == CommandResult::NEGATIVE){
             break;
         }
     }
