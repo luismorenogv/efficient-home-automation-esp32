@@ -11,11 +11,12 @@
 RoomNode* RoomNode::instance = nullptr;
 
 RoomNode::RoomNode(uint8_t room_id)
-    : room_id(room_id), wifi_channel(0), communications(), presenceSensor(), lights(), airConditioner(),
+    : room_id(room_id), wifi_channel(0), presenceSensor(), communications(&radioMutex), lights(), airConditioner(),
     espnowTaskHandle(NULL), user_stop(false), connected(false), cold({DEFAULT_HOUR_COLD, DEFAULT_MIN_COLD}), warm({DEFAULT_HOUR_WARM, DEFAULT_MIN_WARM}) {
     instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
+    radioMutex = xSemaphoreCreateMutex();
 }
 
 // Initializes node: sets up Wi-Fi, ESP-NOW, presence sensor, NTP, and lights schedule
@@ -26,13 +27,14 @@ void RoomNode::initialize() {
     presenceSensor.initialize();
 
     communications.initializeWifi();
+    ntpClient.initialize();
     if (!communications.initializeESPNOW()) {
         LOG_ERROR("ESP-NOW init failed.");
         tryLater();
     }
 
     communications.setQueue(espnowQueue);
-    ntpClient.initialize();
+    
     WiFi.disconnect(); 
 
     if(!joinNetwork()){
@@ -87,12 +89,13 @@ bool RoomNode::joinNetwork() {
         connected = false;
         uint8_t retries = 0;
         while (!connected && retries < MAX_RETRIES) {
-            communications.sendMsg(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
-            if (communications.waitForAck(MessageType::JOIN_ROOM, ACK_TIMEOUT_MS)) {
-                connected = true;
-            } else {
-                retries++;
-                LOG_WARNING("No ACK, retry (%u/%u)", retries, MAX_RETRIES);
+            if (communications.sendMsg(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg))){
+                if (communications.waitForAck(MessageType::JOIN_ROOM, ACK_TIMEOUT_MS)) {
+                    connected = true;
+                } else {
+                    retries++;
+                    LOG_WARNING("No ACK, retry (%u/%u)", retries, MAX_RETRIES);
+                }
             }
         }
 
@@ -332,20 +335,23 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(NTPSYNC_PERIOD));
-        WiFi.reconnect();
-        LOG_INFO("WiFi reconnecting for NTP");
-        while (WiFi.status() != WL_CONNECTED) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            #ifdef ENABLE_LOGGING
-                Serial.print(".");
-            #endif
-        }
-        LOG_INFO("Wi-Fi connected");
-        self->ntpClient.initialize();
+        // Semaphore is needed because router may assign a different channel from the MasterDevice
+        xSemaphoreTake(self->radioMutex, portMAX_DELAY);
+            WiFi.reconnect();
+            LOG_INFO("WiFi reconnecting for NTP");
+            while (WiFi.status() != WL_CONNECTED) {
+                vTaskDelay(pdMS_TO_TICKS(500));
+                #ifdef ENABLE_LOGGING
+                    Serial.print(".");
+                #endif
+            }
+            LOG_INFO("Wi-Fi connected");
+            self->ntpClient.initialize();
 
-        WiFi.disconnect();
+            WiFi.disconnect();
         LOG_INFO("WiFi disconnected after NTP sync");
         esp_wifi_set_channel(self->wifi_channel, WIFI_SECOND_CHAN_NONE); // Set WiFi channel back to master's channel
+        xSemaphoreGive(self->radioMutex);
         
         UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
         LOG_INFO("NTPSyncTask: Stack watermark = %u", (unsigned)watermark);
@@ -361,10 +367,11 @@ void RoomNode::heartbeatTask(void* pvParameter){
         vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_PERIOD));
         if (self->connected){
             msg.room_id = self->room_id;
-            self->communications.sendMsg(reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
-            if (!self->communications.waitForAck(MessageType::HEARTBEAT, self->HEARTBEAT_TIMEOUT)){
-                self->connected = false;
-                LOG_WARNING("HEARTBEAT Ack not received. Trying to reconnect to the network...");
+            if (self->communications.sendMsg(reinterpret_cast<uint8_t*>(&msg), sizeof(msg))){
+                if (!self->communications.waitForAck(MessageType::HEARTBEAT, self->HEARTBEAT_TIMEOUT)){
+                    self->connected = false;
+                    LOG_WARNING("HEARTBEAT Ack not received. Trying to reconnect to the network...");
+                }
             }
         }
         if (!self->connected){
