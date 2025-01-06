@@ -24,6 +24,7 @@ Lights::Lights()
 
     // Initialize mutex
     transmitterMutex = xSemaphoreCreateMutex();
+    isOnMutex = xSemaphoreCreateMutex();
 }
 
 bool Lights::initializeState() {
@@ -96,7 +97,9 @@ CommandResult Lights::sendCommand(Command command) {
             if(new_lux > initial_lux + LUX_MARGIN){
                 result = CommandResult::POSITIVE;
                 if (command == Command::ON){
-                    is_on = true;
+                    xSemaphoreTake(isOnMutex, portMAX_DELAY);
+                        is_on = true;
+                    xSemaphoreGive(isOnMutex);
                     LOG_INFO("Lights are ON");
                 }
             }
@@ -111,7 +114,9 @@ CommandResult Lights::sendCommand(Command command) {
             if(new_lux < initial_lux - LUX_MARGIN){
                 result = CommandResult::POSITIVE;
                 if (command == Command::OFF){
+                    xSemaphoreTake(isOnMutex, portMAX_DELAY);
                     is_on = false;
+                    xSemaphoreGive(isOnMutex);
                     LOG_INFO("Lights are OFF");
                 }
             }
@@ -136,7 +141,11 @@ CommandResult Lights::sendCommand(Command command) {
 }
 
 bool Lights::isOn() const {
-    return is_on;
+    bool is_on_return;
+    xSemaphoreTake(isOnMutex, portMAX_DELAY);
+        is_on_return = is_on;
+    xSemaphoreGive(isOnMutex);
+    return is_on_return;
 }
 
 void Lights::setSchedule(Time w, Time c) {

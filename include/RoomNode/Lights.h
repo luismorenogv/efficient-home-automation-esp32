@@ -104,6 +104,9 @@ private:
     // Mutex to protect RF transmitter
     SemaphoreHandle_t transmitterMutex;
 
+    // Mutex for is_on shared variable
+    SemaphoreHandle_t isOnMutex
+
     // TSL2591 sensor object
     Adafruit_TSL2591 tsl;
 
