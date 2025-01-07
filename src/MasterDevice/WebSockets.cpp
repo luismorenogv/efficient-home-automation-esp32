@@ -211,16 +211,6 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
 
     RoomData room = dataManager.getRoomData(room_id);
 
-    // If there's no data at all, skip
-    if (!room.isRegistered()) return;
-
-    // For sensor node data
-    uint16_t idx = room.sensor.index == 0 ? MAX_DATA_POINTS - 1 : room.sensor.index - 1;
-    float last_temp = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.temperature[idx] : 0;
-    float last_humid = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.humidity[idx] : 0;
-    time_t last_ts = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.timestamps[idx] : 0;
-    uint32_t sleep_ms = room.sensor.registered ? room.sensor.sleep_period_ms : DEFAULT_SLEEP_DURATION;
-
     DynamicJsonDocument doc(512);
     JsonObject obj = doc.to<JsonObject>();
     obj["type"] = "update";
@@ -229,6 +219,13 @@ void WebSockets::sendDataUpdate(uint8_t room_id) {
 
     // Include sensor data only if registered
     if (room.sensor.registered) {
+        
+        uint16_t idx = room.sensor.index == 0 ? MAX_DATA_POINTS - 1 : room.sensor.index - 1;
+        float last_temp = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.temperature[idx] : 0;
+        float last_humid = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.humidity[idx] : 0;
+        time_t last_ts = (room.sensor.registered && room.sensor.valid_data_points > 0) ? room.sensor.timestamps[idx] : 0;
+        uint32_t sleep_ms = room.sensor.registered ? room.sensor.sleep_period_ms : DEFAULT_SLEEP_DURATION;
+        
         obj["temperature"] = last_temp;
         obj["humidity"] = last_humid;
         obj["timestamp"] = last_ts;

@@ -23,6 +23,9 @@ void MasterController::initialize() {
     Serial.begin(115200);
     delay(1000);
 
+    // If needed
+    // setCpuFrequencyMhz(240);
+
     // Initialize communication modules
     communications.initializeWifi();
     if (!communications.initializeESPNOW()) {
@@ -370,6 +373,7 @@ void MasterController::checkSensorNodes(){
                 LOG_WARNING("Data from SensorNode with ID %u not received in time", i);
                 dataManager.unregisterNode(i, NodeType::SENSOR);
                 LOG_INFO("SensorNode with ID %u has been unregistered", i);
+                webSockets.sendDataUpdate(i);
             }
         }
     }

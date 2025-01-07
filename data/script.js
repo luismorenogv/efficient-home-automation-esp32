@@ -177,198 +177,218 @@ function displayHistoryModal(data) {
     });
 }
 
-// Updates sensor data display for a room
+// Updates sensor and control data display for a room
 function updateSensorData(data) {
     console.log(data);
-    const container = document.getElementById('sensor-data');
+    const container = document.getElementById('home-data');
     let roomDiv = document.getElementById(`room-${data.room_id}`);
 
-    // If the roomDiv doesn't exist, create it
+    // Remove roomDiv if both sensor and control are unregistered
+    if (!data.control_registered && !data.sensor_registered) {
+        if (roomDiv) {
+            roomDiv.remove();
+            console.log(`Room ${data.room_id} removed from UI (both nodes unregistered).`);
+        }
+        return;
+    }
+
+    // Create roomDiv if it doesn't exist
     if (!roomDiv) {
         roomDiv = document.createElement('div');
         roomDiv.className = 'room-box';
         roomDiv.id = `room-${data.room_id}`;
 
+        // Room title
         const title = document.createElement('h2');
         title.textContent = data.room_name;
         roomDiv.appendChild(title);
 
-        // Temperature & Humidity
-        const tempPara = document.createElement('p');
-        tempPara.id = `temp-${data.room_id}`;
-        roomDiv.appendChild(tempPara);
+        // Sensor container
+        const sensorContainer = document.createElement('div');
+        sensorContainer.className = 'sensor-data';
+        sensorContainer.style.display = 'none'; // Hidden by default
+        roomDiv.appendChild(sensorContainer);
 
-        const humidPara = document.createElement('p');
-        humidPara.id = `humid-${data.room_id}`;
-        roomDiv.appendChild(humidPara);
-
-        const timePara = document.createElement('p');
-        timePara.id = `time-${data.room_id}`;
-        roomDiv.appendChild(timePara);
-
-        // Button for Show History (only if sensor node is registered)
-        const historyButton = document.createElement('button');
-        historyButton.id = `history-${data.room_id}`;
-        historyButton.textContent = 'Show History';
-        historyButton.onclick = () => showHistoryModal(data.room_id);
-        historyButton.style.marginRight = '10px';
-        historyButton.style.display = 'none'; // Hide by default
-        roomDiv.appendChild(historyButton);
-
-        // Add sleep period dropdown
-        const sleepLabel = document.createElement('label');
-        sleepLabel.id = `sleep-label-${data.room_id}`;
-        sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
-        sleepLabel.textContent = `Sleep Period: `;
-        sleepLabel.style.display = 'none';
-        roomDiv.appendChild(sleepLabel);
-
-        const sleepSelect = document.createElement('select');
-        sleepSelect.id = `sleep-${data.room_id}`;
-        sleepSelect.style.display = 'none';
-
-        const options = [
-            { text: '5 min', value: '5min' },
-            { text: '15 min', value: '15min' },
-            { text: '30 min', value: '30min' },
-            { text: '1 h', value: '1h' },
-            { text: '3 h', value: '3h' },
-            { text: '6 h', value: '6h' },
-        ];
-
-        options.forEach(opt => {
-            const optionElement = document.createElement('option');
-            optionElement.value = opt.value;
-            optionElement.textContent = opt.text;
-            sleepSelect.appendChild(optionElement);
-        });
-
-        sleepSelect.onchange = () => {
-            const selected = sleepSelect.value;
-            const message = {
-               action: "setSleepPeriod",
-               room_id: data.room_id,
-               sleep_period: selected
-            };
-            socket.send(JSON.stringify(message));
-        };
-
-        roomDiv.appendChild(sleepSelect);
-
-        // Add Schedule Form
-        const warmPara = document.createElement('p');
-        warmPara.id = `warm-${data.room_id}`;
-        roomDiv.appendChild(warmPara);
-
-        const coldPara = document.createElement('p');
-        coldPara.id = `cold-${data.room_id}`;
-        roomDiv.appendChild(coldPara);
+        // Control container
+        const controlContainer = document.createElement('div');
+        controlContainer.className = 'control-data';
+        controlContainer.style.display = 'none'; // Hidden by default
+        roomDiv.appendChild(controlContainer);
 
         container.appendChild(roomDiv);
     }
 
-    if (data.sensor_registered){
-        // Show the getHistory button and other controls when room is registered
-        const historyButton = document.getElementById(`history-${data.room_id}`);
-        if (historyButton) {
+    // Get sensor and control containers
+    let sensorContainer = roomDiv.querySelector('.sensor-data');
+    let controlContainer = roomDiv.querySelector('.control-data');
+
+    // Handle SensorNode
+    if (data.sensor_registered) {
+        sensorContainer.style.display = 'block';
+
+        // Create sensor elements if not present
+        if (!sensorContainer.hasChildNodes()) {
+            // Temperature
+            const tempPara = document.createElement('p');
+            tempPara.id = `temp-${data.room_id}`;
+            sensorContainer.appendChild(tempPara);
+
+            // Humidity
+            const humidPara = document.createElement('p');
+            humidPara.id = `humid-${data.room_id}`;
+            sensorContainer.appendChild(humidPara);
+
+            // Last Updated
+            const timePara = document.createElement('p');
+            timePara.id = `time-${data.room_id}`;
+            sensorContainer.appendChild(timePara);
+
+            // Show History Button
+            const historyButton = document.createElement('button');
+            historyButton.id = `history-${data.room_id}`;
+            historyButton.textContent = 'Show History';
+            historyButton.onclick = () => showHistoryModal(data.room_id);
+            historyButton.style.marginRight = '10px';
             historyButton.style.display = 'inline-block';
+            sensorContainer.appendChild(historyButton);
 
-            const sleepLabel = document.getElementById(`sleep-label-${data.room_id}`);
-            const sleepSelect = document.getElementById(`sleep-${data.room_id}`);
-            if (sleepLabel) {
-                sleepLabel.style.display = 'inline-block';
-            }
-            if (sleepSelect) {
-                sleepSelect.style.display = 'inline-block';
-            }
+            // Sleep Period Dropdown
+            const sleepLabel = document.createElement('label');
+            sleepLabel.id = `sleep-label-${data.room_id}`;
+            sleepLabel.setAttribute('for', `sleep-${data.room_id}`);
+            sleepLabel.textContent = `Sleep Period: `;
+            sleepLabel.style.display = 'inline-block';
+            sensorContainer.appendChild(sleepLabel);
 
-            // Show Lights Toggle
-            const lightsToggleLabel = document.querySelector(`#room-${data.room_id} .switch`);
-            if (lightsToggleLabel) {
-                lightsToggleLabel.style.display = 'inline-block';
-            }
+            const sleepSelect = document.createElement('select');
+            sleepSelect.id = `sleep-${data.room_id}`;
+            sleepSelect.style.display = 'inline-block';
+
+            const options = [
+                { text: '5 min', value: '5min' },
+                { text: '15 min', value: '15min' },
+                { text: '30 min', value: '30min' },
+                { text: '1 h', value: '1h' },
+                { text: '3 h', value: '3h' },
+                { text: '6 h', value: '6h' },
+            ];
+
+            options.forEach(opt => {
+                const optionElement = document.createElement('option');
+                optionElement.value = opt.value;
+                optionElement.textContent = opt.text;
+                sleepSelect.appendChild(optionElement);
+            });
+
+            sleepSelect.onchange = () => {
+                const selected = sleepSelect.value;
+                const message = {
+                    action: "setSleepPeriod",
+                    room_id: data.room_id,
+                    sleep_period: selected
+                };
+                socket.send(JSON.stringify(message));
+            };
+
+            sensorContainer.appendChild(sleepSelect);
         }
 
+        // Update sleep period selection
         const sleepSelect = document.getElementById(`sleep-${data.room_id}`);
-        if (sleepSelect && typeof data.sleep_period_ms !== 'undefined'){
+        if (sleepSelect && typeof data.sleep_period_ms !== 'undefined') {
             sleepSelect.value = sleepMsToStr(data.sleep_period_ms);
         }
 
-        // Update displayed sensor values
-        if (typeof data.temperature !== 'undefined'){
-            document.getElementById(`temp-${data.room_id}`).textContent = `Temperature: ${data.temperature.toFixed(2)} °C`; 
+        // Update sensor values
+        if (typeof data.temperature === 'number') {
+            const tempPara = document.getElementById(`temp-${data.room_id}`);
+            if (tempPara) {
+                tempPara.textContent = `Temperature: ${data.temperature.toFixed(2)} °C`;
+            }
         }
-        if (typeof data.humidity !== 'undefined'){
-            document.getElementById(`humid-${data.room_id}`).textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
+        if (typeof data.humidity === 'number') {
+            const humidPara = document.getElementById(`humid-${data.room_id}`);
+            if (humidPara) {
+                humidPara.textContent = `Humidity: ${data.humidity.toFixed(2)} %`;
+            }
         }
-        if (typeof data.timestamp !== 'undefined' && data.timestamp > 0) {
-        const date = new Date(data.timestamp * 1000);
-            document.getElementById(`time-${data.room_id}`).textContent = `Last Updated: ${date.toLocaleString()}`;
+        if (typeof data.timestamp === 'number' && data.timestamp > 0) {
+            const timePara = document.getElementById(`time-${data.room_id}`);
+            if (timePara) {
+                const date = new Date(data.timestamp * 1000);
+                timePara.textContent = `Last Updated: ${date.toLocaleString()}`;
+            }
         } else {
-            document.getElementById(`time-${data.room_id}`).textContent = '';
+            const timePara = document.getElementById(`time-${data.room_id}`);
+            if (timePara) {
+                timePara.textContent = '';
+            }
+        }
+    } else {
+        // Hide and clear sensor data if SensorNode is unregistered
+        if (sensorContainer) {
+            sensorContainer.style.display = 'none';
+            sensorContainer.innerHTML = '';
         }
     }
 
-    if (data.control_registered){
-        // If room control data is available, create schedule form if not present
-        if (typeof data.warm_time !== 'undefined' && typeof data.cold_time !== 'undefined') {
-            let scheduleForm = document.getElementById(`schedule-form-${data.room_id}`);
-            if (!scheduleForm) {
-                scheduleForm = document.createElement('div');
-                scheduleForm.id = `schedule-form-${data.room_id}`;
+    // Handle RoomNode (Control)
+    if (data.control_registered) {
+        controlContainer.style.display = 'block';
 
-                const warmInput = document.createElement('input');
-                warmInput.type = 'time';
-                warmInput.id = `warm-input-${data.room_id}`;
-                warmInput.value = data.warm_time;
+        // Create control elements if not present
+        if (!controlContainer.hasChildNodes()) {
+            // Schedule Form
+            const scheduleForm = document.createElement('div');
+            scheduleForm.id = `schedule-form-${data.room_id}`;
 
-                const coldInput = document.createElement('input');
-                coldInput.type = 'time';
-                coldInput.id = `cold-input-${data.room_id}`;
-                coldInput.value = data.cold_time;
+            const warmInput = document.createElement('input');
+            warmInput.type = 'time';
+            warmInput.id = `warm-input-${data.room_id}`;
+            warmInput.value = data.warm_time;
 
-                const setScheduleButton = document.createElement('button');
-                setScheduleButton.textContent = 'Set Schedule';
-                setScheduleButton.onclick = () => {
-                    const warmVal = document.getElementById(`warm-input-${data.room_id}`).value; 
-                    const coldVal = document.getElementById(`cold-input-${data.room_id}`).value;
+            const coldInput = document.createElement('input');
+            coldInput.type = 'time';
+            coldInput.id = `cold-input-${data.room_id}`;
+            coldInput.value = data.cold_time;
 
-                    const message = {
-                        action: "setSchedule",
-                        room_id: data.room_id,
-                        warm_time: warmVal,
-                        cold_time: coldVal
-                    };
-                    socket.send(JSON.stringify(message));
+            const setScheduleButton = document.createElement('button');
+            setScheduleButton.textContent = 'Set Schedule';
+            setScheduleButton.onclick = () => {
+                const warmVal = warmInput.value;
+                const coldVal = coldInput.value;
+                const message = {
+                    action: "setSchedule",
+                    room_id: data.room_id,
+                    warm_time: warmVal,
+                    cold_time: coldVal
                 };
+                socket.send(JSON.stringify(message));
+            };
 
-                scheduleForm.appendChild(document.createTextNode("Warm Mode Time: "));
-                scheduleForm.appendChild(warmInput);
-                scheduleForm.appendChild(document.createElement('br'));
+            scheduleForm.appendChild(document.createTextNode("Warm Mode Time: "));
+            scheduleForm.appendChild(warmInput);
+            scheduleForm.appendChild(document.createElement('br'));
 
-                scheduleForm.appendChild(document.createTextNode("Cold Mode Time: "));
-                scheduleForm.appendChild(coldInput);
-                scheduleForm.appendChild(document.createElement('br'));
+            scheduleForm.appendChild(document.createTextNode("Cold Mode Time: "));
+            scheduleForm.appendChild(coldInput);
+            scheduleForm.appendChild(document.createElement('br'));
 
-                scheduleForm.appendChild(setScheduleButton);
-                roomDiv.appendChild(scheduleForm);
-            }
-        }
+            scheduleForm.appendChild(setScheduleButton);
+            controlContainer.appendChild(scheduleForm);
 
-        let toggleContainer = document.getElementById(`lights-toggle-${data.room_id}`);
-        
-        if (!toggleContainer) {
-            toggleContainer = document.createElement('div');
+            // Lights Toggle
+            const toggleContainer = document.createElement('div');
             toggleContainer.id = `lights-toggle-${data.room_id}`;
             toggleContainer.style.marginTop = '10px';
-            
+
             const toggleLabel = document.createElement('label');
             toggleLabel.className = 'toggle-button';
-            
+
             const toggleInput = document.createElement('input');
             toggleInput.type = 'checkbox';
             toggleInput.checked = data.lights_on;
-            
+
             toggleInput.onchange = () => {
                 const message = {
                     action: "toggleLights",
@@ -377,29 +397,45 @@ function updateSensorData(data) {
                 };
                 socket.send(JSON.stringify(message));
             };
-            
+
             const toggleSlider = document.createElement('span');
             toggleSlider.className = 'toggle-slider';
-            
+
             toggleLabel.appendChild(toggleInput);
             toggleLabel.appendChild(toggleSlider);
-            
+
             const toggleText = document.createElement('span');
             toggleText.style.marginLeft = '10px';
             toggleText.textContent = 'Lights';
-            
+
             toggleContainer.appendChild(toggleLabel);
             toggleContainer.appendChild(toggleText);
-            roomDiv.appendChild(toggleContainer);
+            controlContainer.appendChild(toggleContainer);
         } else {
-            // Update existing toggle state
-            const toggleInput = toggleContainer.querySelector('input');
-            if (toggleInput) {
-                toggleInput.checked = data.lights_on;
+            // Update warm and cold times
+            const warmInput = document.getElementById(`warm-input-${data.room_id}`);
+            const coldInput = document.getElementById(`cold-input-${data.room_id}`);
+            if (warmInput) warmInput.value = data.warm_time;
+            if (coldInput) coldInput.value = data.cold_time;
+
+            // Update lights toggle
+            const toggleContainer = document.getElementById(`lights-toggle-${data.room_id}`);
+            if (toggleContainer) {
+                const toggleInput = toggleContainer.querySelector('input');
+                if (toggleInput) {
+                    toggleInput.checked = data.lights_on;
+                }
             }
+        }
+    } else {
+        // Hide and clear control data if RoomNode is unregistered
+        if (controlContainer) {
+            controlContainer.style.display = 'none';
+            controlContainer.innerHTML = '';
         }
     }
 }
+
 
 // Converts sleep period from ms to string
 function sleepMsToStr(ms) {
