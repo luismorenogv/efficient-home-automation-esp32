@@ -11,13 +11,14 @@
 WebServer::WebServer() : server(80) {
 }
 
-void WebServer::initialize() {
+bool WebServer::initialize() {
     // Initialize LittleFS
     if (!LittleFS.begin(true)) {
         LOG_ERROR("Failed to mount LittleFS");
-        return;
+        return false;
     }
     setupRoutes();
+    return true;
 }
 
 void WebServer::setupRoutes() {

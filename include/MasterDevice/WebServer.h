@@ -16,7 +16,7 @@
 class WebServer {
 public:
     WebServer();
-    void initialize();
+    bool initialize();
     void start();
     AsyncWebServer& getServer();
 

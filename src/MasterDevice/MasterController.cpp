@@ -33,7 +33,9 @@ void MasterController::initialize() {
     
     // Initialize NTP and Web Server
     while(!ntpClient.initialize());
-    webServer.initialize();
+    if (!webServer.initialize()){
+        tryLater();
+    }
 
     // Initialize WebSockets with callbacks
     webSockets.initialize(webServer.getServer());
