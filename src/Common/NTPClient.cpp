@@ -15,7 +15,7 @@ NTPClient::NTPClient() {
 }
 
 // Initializes the NTP client and synchronizes time
-void NTPClient::initialize() {
+bool NTPClient::initialize() {
     configTime(3600, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
 
@@ -30,6 +30,7 @@ void NTPClient::initialize() {
 
     if (retry == retry_count) {
         LOG_ERROR("Failed to synchronize time after multiple attempts");
+        return false;
     } else {
         time_t now = time(nullptr);
         LOG_INFO("Time synchronized: %ld", now);
@@ -37,6 +38,7 @@ void NTPClient::initialize() {
             Serial.println(&timeinfo, "[INFO] Current time: %A, %B %d %Y %H:%M:%S");
         #endif
     }
+    return true;
 }
 
 // Checks if the system time is valid

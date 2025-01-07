@@ -11,10 +11,6 @@
 // Singleton instance
 static MasterController* instance = nullptr;
 
-// Constants for retry mechanism
-constexpr uint8_t MAX_RETRIES = 3;
-constexpr uint32_t RETRY_INTERVAL_MS = 5000; // 5 seconds
-
 MasterController::MasterController() 
     : communications(), 
       webSockets(dataManager) 
@@ -36,7 +32,7 @@ void MasterController::initialize() {
     communications.setQueue(espnowQueue);
     
     // Initialize NTP and Web Server
-    ntpClient.initialize();
+    while(!ntpClient.initialize());
     webServer.initialize();
 
     // Initialize WebSockets with callbacks

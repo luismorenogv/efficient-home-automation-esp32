@@ -24,10 +24,13 @@ void RoomNode::initialize() {
     Serial.begin(115200);
     delay(1000);
 
-    presenceSensor.initialize();
+    if (!presenceSensor.initialize()){
+        LOG_ERROR("Presence Sensor init failed.");
+        tryLater();
+    }
 
     communications.initializeWifi();
-    ntpClient.initialize();
+    while(!ntpClient.initialize());
     if (!communications.initializeESPNOW()) {
         LOG_ERROR("ESP-NOW init failed.");
         tryLater();

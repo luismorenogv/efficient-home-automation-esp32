@@ -20,7 +20,7 @@ public:
     NTPClient();
     
     // Initializes NTP client and synchronizes time
-    void initialize();
+    bool initialize();
     
     // Checks if the system time is valid
     bool isTimeValid();
