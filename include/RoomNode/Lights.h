@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <SPI.h>
 #include <Arduino.h>
 #include <Adafruit_TSL2591.h>
 #include "config.h"
@@ -86,10 +87,10 @@ private:
     const uint16_t PAUSE_US              = 8850;  // µs between repeats
     const uint8_t  NUM_REPEATS            = 5;
     const uint8_t  MAX_FAILURES           = 2;
-    const float    LUX_MARGIN            = 20.0f; // Lux margin for verification
+    const float    LUX_MARGIN            = 30.0; // Lux margin for verification
     const uint16_t VERIFY_DELAY_MS        = 1000;  // ms delay after command
-    const float    DARK_THRESHOLD         = 50.0f; // Lux below which it's considered dark
-    const float    BRIGHT_THRESHOLD       = 500.0f; // Lux above which it's considered bright
+    const float    DARK_THRESHOLD         = 100.0; // Lux below which it's considered dark
+    const float    BRIGHT_THRESHOLD       = 1500.0; // Lux above which it's considered bright
     const uint8_t  MAX_TRANSMIT_RETRIES   = 3;
     const uint8_t  COMMAND_REPEATS = 2;
     
@@ -105,7 +106,7 @@ private:
     SemaphoreHandle_t transmitterMutex;
 
     // Mutex for is_on shared variable
-    SemaphoreHandle_t isOnMutex
+    SemaphoreHandle_t isOnMutex;
 
     // TSL2591 sensor object
     Adafruit_TSL2591 tsl;

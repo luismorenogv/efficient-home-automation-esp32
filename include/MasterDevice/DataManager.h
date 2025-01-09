@@ -13,7 +13,7 @@
 #include <freertos/semphr.h>
 #include "Common/common.h"
 #include "config.h"
-
+constexpr const float NO_HT_VALUE = 1000.0;
 // Structure to hold sensor-related data for a room
 struct SensorData {
     bool registered;
@@ -33,8 +33,8 @@ struct SensorData {
           valid_data_points(0), pending_update(false), new_sleep_period_ms(DEFAULT_SLEEP_DURATION),
           latest_sensor_reception(millis())
     {
-        memset(temperature, 0, sizeof(temperature));
-        memset(humidity, 0, sizeof(humidity));
+        memset(temperature, NO_HT_VALUE, MAX_DATA_POINTS * sizeof(float));
+        memset(humidity, NO_HT_VALUE, MAX_DATA_POINTS * sizeof(float));
         memset(timestamps, 0, sizeof(timestamps));
         memset(mac_addr, 0, sizeof(mac_addr));
     }

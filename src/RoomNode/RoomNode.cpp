@@ -26,7 +26,7 @@ void RoomNode::initialize() {
 
     if (!presenceSensor.initialize()){
         LOG_ERROR("Presence Sensor init failed.");
-        tryLater();
+        // tryLater();
     }
 
     communications.initializeWifi();
@@ -190,6 +190,8 @@ void RoomNode::espnowTask(void* pvParameter) {
                         toggle_payload = reinterpret_cast<LightsToggleMsg*>(msg.data);
                         turn_on = toggle_payload->turn_on;
 
+                        // User can turn off lights at any presence state and it will pause the presence automation
+                        // But user can only turn on lights if presence is detected
                         if (turn_on) {
                             if (self->lights.isOn()) {
                                 LOG_INFO("Lights are already ON");
@@ -198,12 +200,12 @@ void RoomNode::espnowTask(void* pvParameter) {
                                 presence_state = digitalRead(LD2410_PIN);
                                 if (presence_state == HIGH){
                                     self->lights.sendCommand(Command::ON);
+                                    self->user_stop = false;
                                 } else {
                                     // presenceTask will turn on the lights if presence is detected
                                     LOG_INFO("Presence not detected. Lights turn on ignored.");
                                 }
                             }
-                            self->user_stop = false;
                         } else {
                             if (!self->lights.isOn()) {
                                 LOG_INFO("Lights are already OFF");
@@ -213,17 +215,18 @@ void RoomNode::espnowTask(void* pvParameter) {
                             }
                             self->user_stop = true;
                         }
-
-                        lights_update.is_on = self->lights.isOn();
+                        lights_update.is_on = self->lights.isOn(); 
+                        LOG_INFO("TEST2");
                         self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
+                        LOG_INFO("Lights update sent to the master");
                     }
                     break;
 
                 default:
                     LOG_WARNING("Unknown message type: %d", msg_type);
             }
-            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-            LOG_INFO("espNowTask: Stack watermark = %u", (unsigned)watermark);
+            // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            // LOG_INFO("espNowTask: Stack watermark = %u", (unsigned)watermark);
 
         }
     }
@@ -258,8 +261,8 @@ void RoomNode::lightsControlTask(void* pvParameter) {
         } else {
             lights_on = false;
         }
-        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-        LOG_INFO("lightsControlTask: Stack watermark = %u", (unsigned)watermark);
+        // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        // LOG_INFO("lightsControlTask: Stack watermark = %u", (unsigned)watermark);
 
         vTaskDelay(pdMS_TO_TICKS(LIGHTS_CONTROL_PERIOD));
     }
@@ -325,8 +328,8 @@ void RoomNode::presenceTask(void* pvParameter) {
                 }
             }
             previous_presence = new_presence;
-            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-            LOG_INFO("presenceTask: Stack watermark = %u", (unsigned)watermark);
+            // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            // LOG_INFO("presenceTask: Stack watermark = %u", (unsigned)watermark);
 
         }
     }
@@ -356,8 +359,8 @@ void RoomNode::NTPSyncTask(void* pvParameter) {
         esp_wifi_set_channel(self->wifi_channel, WIFI_SECOND_CHAN_NONE); // Set WiFi channel back to master's channel
         xSemaphoreGive(self->radioMutex);
         
-        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-        LOG_INFO("NTPSyncTask: Stack watermark = %u", (unsigned)watermark);
+        // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        // LOG_INFO("NTPSyncTask: Stack watermark = %u", (unsigned)watermark);
 
     }
 }
@@ -385,8 +388,8 @@ void RoomNode::heartbeatTask(void* pvParameter){
                 LOG_WARNING("Unable to reconnect to the network");
             }
         }
-        UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
-        LOG_INFO("heartbeatTask: Stack watermark = %u", (unsigned)watermark);
+        // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+        // LOG_INFO("heartbeatTask: Stack watermark = %u", (unsigned)watermark);
     }
     
 }

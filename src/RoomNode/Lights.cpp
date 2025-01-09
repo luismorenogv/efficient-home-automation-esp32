@@ -52,14 +52,33 @@ bool Lights::initializeState() {
         LOG_INFO("Lux after ON cmd: %.2f", new_lux);
 
         LOG_INFO("Initializing lights OFF");
-        is_on = false;  // Virtual state
+        if (xSemaphoreTake(isOnMutex, pdMS_TO_TICKS(100)) == pdTRUE) { // 100ms timeout
+            is_on = false;
+            xSemaphoreGive(isOnMutex);
+        } else {
+            return false;
+            LOG_WARNING("Failed to acquire isOnMutex in initializeState()");
+        }
 
         if (new_lux > initial_lux + LUX_MARGIN) {
             // If lux increased, assume lights turned on
-            sendSignal(Light, LightRepeat);
+            // Turn them back off
+            if (xSemaphoreTake(isOnMutex, pdMS_TO_TICKS(100)) == pdTRUE) { // 100ms timeout
+                is_on = true;
+                xSemaphoreGive(isOnMutex);
+            } else {
+                return false;
+                LOG_WARNING("Failed to acquire isOnMutex in initializeState()");
+            }
+            if (sendCommand(Command::OFF) != CommandResult::POSITIVE) {
+                LOG_ERROR("Failed to turn lights back OFF");
+                continue;
+            }
+            LOG_INFO("Lights turned back OFF");
         }
         else if (new_lux < initial_lux - LUX_MARGIN) {
-            // Not expected; possibly environment changed
+            // Leave lights off
+            LOG_INFO("No additional signal is needed. Lights are OFF");
         }
         else {
             LOG_WARNING("Unable to determine initial lights state in attempt %u", i);
@@ -141,10 +160,13 @@ CommandResult Lights::sendCommand(Command command) {
 }
 
 bool Lights::isOn() const {
-    bool is_on_return;
-    xSemaphoreTake(isOnMutex, portMAX_DELAY);
+    bool is_on_return = false;
+    if (xSemaphoreTake(isOnMutex, pdMS_TO_TICKS(100)) == pdTRUE) { // 100ms timeout
         is_on_return = is_on;
-    xSemaphoreGive(isOnMutex);
+        xSemaphoreGive(isOnMutex);
+    } else {
+        LOG_WARNING("Failed to acquire isOnMutex in isOn()");
+    }
     return is_on_return;
 }
 

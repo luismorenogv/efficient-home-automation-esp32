@@ -39,13 +39,19 @@ void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg) {
 // Sends data to the master (assumes only one peer)
 bool RoomCommunications::sendMsg(const uint8_t* data, size_t size) {
     if (numPeers > 0) {
-        xSemaphoreTake(*radioMutex, portMAX_DELAY);
-            return CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
-        xSemaphoreGive(*radioMutex);
+        if (xSemaphoreTake(*radioMutex, portMAX_DELAY) == pdTRUE) {
+            bool result = CommunicationsBase::sendMsg(peers[0].mac_addr, data, size);
+            xSemaphoreGive(*radioMutex); // Ensure semaphore is released
+            return result;
+        } else {
+            LOG_WARNING("Failed to take radioMutex in sendMsg()");
+            return false;
+        }
     }
     LOG_WARNING("No peers registered.");
     return false;
 }
+
 
 // Handles received data by enqueuing it for processing
 void RoomCommunications::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int len) {
