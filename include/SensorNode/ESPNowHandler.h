@@ -13,6 +13,9 @@
 
 class ESPNowHandler : public CommunicationsBase {
 public:
+    // Signals if a delay is needed, to make sure the NEW_SLEEP_PERIOD ACK is sent
+    bool wait_for_send;
+    
     // Constructs with reference to PowerManager for sleep updates
     ESPNowHandler(PowerManager& powerManager);
 

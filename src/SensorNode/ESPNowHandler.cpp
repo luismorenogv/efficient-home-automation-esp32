@@ -15,6 +15,7 @@ ESPNowHandler::ESPNowHandler(PowerManager& powerManager)
     : CommunicationsBase(),
       powerManager(powerManager),
       ack_received(false),
+      wait_for_send(false),
       last_acked_msg(MessageType::ACK) {
     instance = this;
     ackSemaphore = xSemaphoreCreateBinary(); // Used to wait for ACKs
@@ -75,6 +76,8 @@ void ESPNowHandler::onDataRecv(const uint8_t* mac_addr, const uint8_t* data, int
             // Send ACK back to master
             CommunicationsBase::sendAck(mac_addr, MessageType::NEW_SLEEP_PERIOD);
 
+            wait_for_send = true;
+            
             // Signal semaphore after sending ack
             xSemaphoreGive(ackSemaphore);
         } else {

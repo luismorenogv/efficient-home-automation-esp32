@@ -93,6 +93,10 @@ void SensorNode::run() {
             // Try to joinNetwork next cycle
             *first_cycle = true;
         }
+
+        if (espNowHandler.wait_for_send){
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
     }
 }
 
