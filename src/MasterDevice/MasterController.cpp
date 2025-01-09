@@ -221,10 +221,12 @@ void MasterController::espnowTask(void* pvParameter) {
                     if (payload_ack->acked_msg == MessageType::NEW_SLEEP_PERIOD) {
                         self->dataManager.sleepPeriodWasUpdated(acked_room_id);
                         self->pendingSleepUpdate[acked_room_id].attempts = 0;
+                        self->webSockets.sendDataUpdate(acked_room_id);
                         LOG_INFO("Received ACK for NEW_SLEEP_PERIOD from room %u", acked_room_id);
                     } else if (payload_ack->acked_msg == MessageType::NEW_SCHEDULE) {
                         self->dataManager.scheduleWasUpdated(acked_room_id);
                         self->pendingScheduleUpdate[acked_room_id].attempts = 0;
+                        self->webSockets.sendDataUpdate(acked_room_id);
                         LOG_INFO("Received ACK for NEW_SCHEDULE from room %u", acked_room_id);
                     } else {
                         LOG_WARNING("Received ACK for unknown MessageType: %d", payload_ack->acked_msg);

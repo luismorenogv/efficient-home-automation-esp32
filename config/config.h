@@ -43,7 +43,7 @@ constexpr const uint32_t HEARTBEAT_TIMEOUT = 4 * 60 * 1000;
  *************************************************************/
 
 #ifdef MODE_SENSOR
-constexpr uint8_t ROOM_ID = 3;                       // Identifier for the room (Unique for each SensorNode)
+constexpr uint8_t ROOM_ID = 4;                       // Identifier for the room (Unique for each SensorNode)
 
 constexpr unsigned long ACK_TIMEOUT_MS = 1000;       // Acknowledgment timeout in ms
 constexpr uint8_t MAX_RETRIES = 2;                   // Maximum number of retries for sending messages

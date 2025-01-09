@@ -4,3 +4,4 @@
 .vscode/launch.json
 .vscode/ipch
 include/Common/secrets.h
+**/secrets.h

@@ -288,7 +288,7 @@ void WebSockets::sendHistoryData(AsyncWebSocketClient* client, uint8_t room_id) 
             float humid = room.sensor.humidity[index];
             time_t ts = room.sensor.timestamps[index];
 
-            if (ts == 0) continue;
+            if (ts == 0 || temp == NO_HT_VALUE || humid == NO_HT_VALUE) continue;
             
             tempArray.add(temp);
             humidArray.add(humid);
