@@ -239,8 +239,10 @@ void RoomNode::lightsControlTask(void* pvParameter) {
     bool lights_on = false;
     time_t now;
     uint16_t current_minutes;
+    CommandResult result;
 
     while (true) {
+        // Lock task when user manually turns off lights
         while(self->user_stop){
             vTaskDelay(pdMS_TO_TICKS(100));
         }
@@ -259,7 +261,24 @@ void RoomNode::lightsControlTask(void* pvParameter) {
             self->lights.adjustBrightness();
             
         } else {
-            lights_on = false;
+            if (!self->lights.isEnoughLight() && self->presenceSensor.getPresence()){
+                LOG_INFO("There is not enought natural light anymore, turning on lights");
+                self->lights.sendCommand(Command::ON);
+                result = self->lights.sendCommand(Command::ON);
+                if(result == CommandResult::UNCLEAR){
+                    LOG_INFO("Lights are unavailable");
+                    continue;
+                } else if (result == CommandResult::NEGATIVE){
+                    LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
+                    self->lights.sendCommand(Command::ON);
+                } else {
+                    lights_update.is_on = true;
+                    self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
+                    LOG_INFO("Lights succesfully turned ON");
+                }
+            } else {
+                lights_on = false;
+            }
         }
         // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
         // LOG_INFO("lightsControlTask: Stack watermark = %u", (unsigned)watermark);
@@ -292,19 +311,24 @@ void RoomNode::presenceTask(void* pvParameter) {
                 if (self->lights.isOn()){
                     LOG_INFO("Lights are already ON");
                 } else{
-                    LOG_INFO("Turning lights ON");
-                    result = self->lights.sendCommand(Command::ON);
-                    if(result == CommandResult::UNCLEAR){
-                        LOG_INFO("Lights are unavailable");
-                        continue;
-                    } else if (result == CommandResult::NEGATIVE){
-                        LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
-                        self->lights.sendCommand(Command::ON);
+                    if (self->lights.isEnoughLight()){
+                        LOG_INFO("Lights are OFF but with enough natural light. Leaving them OFF");
                     } else {
-                        lights_update.is_on = true;
-                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
-                        LOG_INFO("Lights succesfully turned ON");
+                        LOG_INFO("Turning lights ON");
+                        result = self->lights.sendCommand(Command::ON);
+                        if(result == CommandResult::UNCLEAR){
+                            LOG_INFO("Lights are unavailable");
+                            continue;
+                        } else if (result == CommandResult::NEGATIVE){
+                            LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
+                            self->lights.sendCommand(Command::ON);
+                        } else {
+                            lights_update.is_on = true;
+                            self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
+                            LOG_INFO("Lights succesfully turned ON");
+                        }
                     }
+                    
                 }
                 
             } else if (!new_presence && previous_presence) {
