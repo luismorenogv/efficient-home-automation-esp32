@@ -24,6 +24,7 @@ Lights::Lights()
 
     // Initialize mutex
     transmitterMutex = xSemaphoreCreateMutex();
+    lightsSensorMutex = xSemaphoreCreateMutex();
     isOnMutex = xSemaphoreCreateMutex();
 }
 
@@ -264,15 +265,18 @@ bool Lights::isEnoughLight() {
 }
 
 float Lights::getLuxValue() {
+    float lux = 0.0f;
+    xSemaphoreTake(lightsSensorMutex, portMAX_DELAY);
     uint32_t lum = tsl.getFullLuminosity();
     uint16_t ch0 = lum & 0xFFFF;       // IR + Visible
     uint16_t ch1 = lum >> 16;          // IR
-    float lux = tsl.calculateLux(ch0, ch1);
+    lux = tsl.calculateLux(ch0, ch1);
     if (isnan(lux)) {
         // In some conditions, TSL library can return NaN if sensor saturates
         LOG_WARNING("TSL2591 returned NaN, forcing to 0.0");
         return 0.0f;
     }
+    xSemaphoreGive(lightsSensorMutex);
     return lux;
 }
 

@@ -105,6 +105,9 @@ private:
     // Mutex to protect RF transmitter
     SemaphoreHandle_t transmitterMutex;
 
+    // Mutex to ensure TSL2591 readings are not interrupted
+    SemaphoreHandle_t lightsSensorMutex;
+
     // Mutex for is_on shared variable
     SemaphoreHandle_t isOnMutex;
 
