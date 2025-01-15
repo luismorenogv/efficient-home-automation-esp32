@@ -95,67 +95,76 @@ bool Lights::initializeState() {
 
 CommandResult Lights::sendCommand(Command command) {
     CommandResult result = CommandResult::UNCLEAR;
-    for (uint8_t i ; i < COMMAND_REPEATS; i++){
-        LOG_INFO("Sending cmd: %u (attempt %u/%u)", static_cast<uint8_t>(command), i, COMMAND_REPEATS);
+    // Attempt to take the mutex with a timeout to prevent deadlocks
+    if (xSemaphoreTake(transmitterMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        // Successfully acquired the mutex
+        for (uint8_t i ; i < COMMAND_REPEATS; i++){
+            LOG_INFO("Sending cmd: %u (attempt %u/%u)", static_cast<uint8_t>(command), i, COMMAND_REPEATS);
 
-        // Read initial lux
-        float initial_lux = getLuxValue();
-        LOG_INFO("Lux before cmd: %.2f", initial_lux);
+            // Read initial lux
+            float initial_lux = getLuxValue();
+            LOG_INFO("Lux before cmd: %.2f", initial_lux);
 
-        // Send the command
-        send(command);
+            
+            // Send the command
+            send(command);
 
-        // Wait for verification
-        vTaskDelay(pdMS_TO_TICKS(VERIFY_DELAY_MS));
+            // Wait for verification
+            vTaskDelay(pdMS_TO_TICKS(VERIFY_DELAY_MS));
 
-        // Read new lux
-        float new_lux = getLuxValue();
-        LOG_INFO("Lux after cmd: %.2f", new_lux);
+            // Read new lux
+            float new_lux = getLuxValue();
+            LOG_INFO("Lux after cmd: %.2f", new_lux);
 
-        // Verify result according to command, initial_lux, and new_lux
-        if (command == Command::MORE_LIGHT || command == Command::ON) {
-            if(new_lux > initial_lux + LUX_MARGIN){
-                result = CommandResult::POSITIVE;
-                if (command == Command::ON){
-                    xSemaphoreTake(isOnMutex, portMAX_DELAY);
-                        is_on = true;
-                    xSemaphoreGive(isOnMutex);
-                    LOG_INFO("Lights are ON");
+            // Verify result according to command, initial_lux, and new_lux
+            if (command == Command::MORE_LIGHT || command == Command::ON) {
+                if(new_lux > initial_lux + LUX_MARGIN){
+                    result = CommandResult::POSITIVE;
+                    if (command == Command::ON){
+                        xSemaphoreTake(isOnMutex, portMAX_DELAY);
+                            is_on = true;
+                        xSemaphoreGive(isOnMutex);
+                        LOG_INFO("Lights are ON");
+                    }
+                }
+                else if (new_lux < initial_lux - LUX_MARGIN){
+                    result = CommandResult::NEGATIVE;
+                }
+                else{
+                    result = CommandResult::UNCLEAR;
                 }
             }
-            else if (new_lux < initial_lux - LUX_MARGIN){
-                result = CommandResult::NEGATIVE;
-            }
-            else{
-                result = CommandResult::UNCLEAR;
-            }
-        }
-        else if (command == Command::LESS_LIGHT || command == Command::OFF){
-            if(new_lux < initial_lux - LUX_MARGIN){
-                result = CommandResult::POSITIVE;
-                if (command == Command::OFF){
-                    xSemaphoreTake(isOnMutex, portMAX_DELAY);
-                    is_on = false;
-                    xSemaphoreGive(isOnMutex);
-                    LOG_INFO("Lights are OFF");
+            else if (command == Command::LESS_LIGHT || command == Command::OFF){
+                if(new_lux < initial_lux - LUX_MARGIN){
+                    result = CommandResult::POSITIVE;
+                    if (command == Command::OFF){
+                        xSemaphoreTake(isOnMutex, portMAX_DELAY);
+                        is_on = false;
+                        xSemaphoreGive(isOnMutex);
+                        LOG_INFO("Lights are OFF");
+                    }
+                }
+                else if (new_lux > initial_lux + LUX_MARGIN){
+                    result = CommandResult::NEGATIVE;
+                }
+                else{
+                    result = CommandResult::UNCLEAR;
                 }
             }
-            else if (new_lux > initial_lux + LUX_MARGIN){
-                result = CommandResult::NEGATIVE;
+            else {
+                // Color change commands are assumed as positive
+                result = CommandResult::POSITIVE;
             }
-            else{
-                result = CommandResult::UNCLEAR;
-            }
-        }
-        else {
-            // Color change commands are assumed as positive
-            result = CommandResult::POSITIVE;
-        }
 
-        LOG_INFO("Command %s resulted %s", COMMAND_NAMES[static_cast<uint8_t>(command)], RESULT_NAMES[static_cast<uint8_t>(result)]);
-        if (result == CommandResult::POSITIVE || result == CommandResult::NEGATIVE){
-            break;
+            LOG_INFO("Command %s resulted %s", COMMAND_NAMES[static_cast<uint8_t>(command)], RESULT_NAMES[static_cast<uint8_t>(result)]);
+            if (result == CommandResult::POSITIVE || result == CommandResult::NEGATIVE){
+                break;
+            }
         }
+    }
+    else {
+        // Failed to acquire the mutex within the timeout
+        LOG_WARNING("Failed to acquire transmitter mutex. Command not sent.");
     }
     return result;
 }
@@ -335,26 +344,17 @@ void Lights::transmit(const char* bits) {
 }
 
 bool Lights::sendSignal(const char* command, const char* repeat) {
-    // Attempt to take the mutex with a timeout to prevent deadlocks
-    if (xSemaphoreTake(transmitterMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-        // Successfully acquired the mutex
-        transmit(command);
-        for (int i = 0; i < NUM_REPEATS; i++) {
-            // Wait between repeats
-            uint8_t time_ms = PAUSE_US / 1000;
-            uint8_t remaining_time_us = PAUSE_US % 1000;
-            vTaskDelay(pdMS_TO_TICKS(time_ms));
-            delayMicroseconds(remaining_time_us);
-            transmit(repeat);
-        }
+    transmit(command);
+    for (int i = 0; i < NUM_REPEATS; i++) {
+        // Wait between repeats
+        uint8_t time_ms = PAUSE_US / 1000;
+        uint8_t remaining_time_us = PAUSE_US % 1000;
+        vTaskDelay(pdMS_TO_TICKS(time_ms));
+        delayMicroseconds(remaining_time_us);
+        transmit(repeat);
+    }
 
-        // Release the mutex after transmission
-        xSemaphoreGive(transmitterMutex);
-        return true;
-    }
-    else {
-        // Failed to acquire the mutex within the timeout
-        LOG_WARNING("Failed to acquire transmitter mutex. Command not sent.");
-        return false;
-    }
+    // Release the mutex after transmission
+    xSemaphoreGive(transmitterMutex);
+    return true;
 }

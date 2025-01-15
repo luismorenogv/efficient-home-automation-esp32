@@ -267,7 +267,6 @@ void RoomNode::lightsControlTask(void* pvParameter) {
                 result = self->lights.sendCommand(Command::ON);
                 if(result == CommandResult::UNCLEAR){
                     LOG_INFO("Lights are unavailable");
-                    continue;
                 } else if (result == CommandResult::NEGATIVE){
                     LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
                     self->lights.sendCommand(Command::ON);
