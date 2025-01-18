@@ -240,6 +240,7 @@ void RoomNode::lightsControlTask(void* pvParameter) {
     time_t now;
     uint16_t current_minutes;
     CommandResult result;
+    LightsUpdateMsg lights_update;
 
     while (true) {
         // Lock task when user manually turns off lights
