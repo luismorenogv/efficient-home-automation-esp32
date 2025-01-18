@@ -17,6 +17,12 @@ RoomNode::RoomNode(uint8_t room_id)
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
     radioMutex = xSemaphoreCreateMutex();
+
+    if (radioMutex == NULL || espnowQueue == NULL || presenceQueue == NULL) {
+        LOG_ERROR("Failed to create required FreeRTOS resources");
+        return;
+    }
+
 }
 
 // Initializes node: sets up Wi-Fi, ESP-NOW, presence sensor, NTP, and lights schedule
@@ -241,7 +247,7 @@ void RoomNode::lightsControlTask(void* pvParameter) {
     uint16_t current_minutes;
     CommandResult result;
     LightsUpdateMsg lights_update;
-    vTaskDelay(pdMS_TO_TICKS(2000)); // Wait presenceTask to execute
+    vTaskDelay(pdMS_TO_TICKS(3000)); // Wait presenceTask to execute
 
     while (true) {
         // Lock task when user manually turns off lights

@@ -26,6 +26,11 @@ Lights::Lights()
     transmitterMutex = xSemaphoreCreateMutex();
     lightsSensorMutex = xSemaphoreCreateMutex();
     isOnMutex = xSemaphoreCreateMutex();
+
+    if (transmitterMutex == NULL || lightsSensorMutex == NULL || isOnMutex == NULL) {
+        LOG_ERROR("Failed to create required FreeRTOS resources");
+        return;
+    }
 }
 
 bool Lights::initializeState() {
@@ -96,7 +101,7 @@ bool Lights::initializeState() {
 CommandResult Lights::sendCommand(Command command) {
     CommandResult result = CommandResult::UNCLEAR;
     // Attempt to take the mutex with a timeout to prevent deadlocks
-    if (xSemaphoreTake(transmitterMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+    if (xSemaphoreTake(transmitterMutex, pdMS_TO_TICKS(VERIFY_DELAY_MS*3)) == pdTRUE) {
         // Successfully acquired the mutex
         for (uint8_t i ; i < COMMAND_REPEATS; i++){
             LOG_INFO("Sending cmd: %u (attempt %u/%u)", static_cast<uint8_t>(command), i, COMMAND_REPEATS);
@@ -118,6 +123,9 @@ CommandResult Lights::sendCommand(Command command) {
 
             // Verify result according to command, initial_lux, and new_lux
             if (command == Command::MORE_LIGHT || command == Command::ON) {
+                if (!isOn()){
+                    exit;
+                }
                 if(new_lux > initial_lux + LUX_MARGIN){
                     result = CommandResult::POSITIVE;
                     if (command == Command::ON){
@@ -161,6 +169,7 @@ CommandResult Lights::sendCommand(Command command) {
                 break;
             }
         }
+        xSemaphoreGive(transmitterMutex);
     }
     else {
         // Failed to acquire the mutex within the timeout
@@ -230,7 +239,7 @@ void Lights::adjustBrightness() {
     float current_lux = getLuxValue();
     LOG_INFO("Current lux: %.2f", current_lux);
 
-    if (current_lux < DARK_THRESHOLD) {
+    if (current_lux < DARK_THRESHOLD && isOn()) {
         if (!max_brightness){
             min_brightness = false;
             LOG_INFO("Increasing brightness.");
@@ -240,6 +249,7 @@ void Lights::adjustBrightness() {
                     failures++;
                     if (failures >= MAX_FAILURES) {
                         LOG_INFO("Max brightness reached.");
+                        max_brightness = true;
                         break;
                     }
                 }
@@ -251,11 +261,12 @@ void Lights::adjustBrightness() {
             max_brightness = false;
             LOG_INFO("Decreasing brightness.");
             uint8_t failures = 0;
-            while(getLuxValue() > BRIGHT_THRESHOLD) {
+            while(getLuxValue() > BRIGHT_THRESHOLD && isOn()) {
                 if (sendCommand(Command::LESS_LIGHT) != CommandResult::POSITIVE) {
                     failures++;
                     if (failures >= MAX_FAILURES) {
                         LOG_INFO("Min brightness reached.");
+                        min_brightness = true;
                         break;
                     }
                 }
@@ -355,6 +366,5 @@ bool Lights::sendSignal(const char* command, const char* repeat) {
     }
 
     // Release the mutex after transmission
-    xSemaphoreGive(transmitterMutex);
     return true;
 }

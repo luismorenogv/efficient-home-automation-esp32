@@ -88,8 +88,8 @@ private:
     const uint8_t  NUM_REPEATS            = 5;
     const uint8_t  MAX_FAILURES           = 2;
     const float    LUX_MARGIN             = 1.0; // Lux margin for verification
-    const uint16_t VERIFY_DELAY_MS        = 1000;  // ms delay after command
-    const float    DARK_THRESHOLD         = 20.0; // Lux below which it's considered dark
+    const uint16_t VERIFY_DELAY_MS        = 700;  // ms delay after command
+    const float    DARK_THRESHOLD         = 15.0; // Lux below which it's considered dark
     const float    BRIGHT_THRESHOLD       = 500.0; // Lux above which it's considered bright
     const uint8_t  MAX_TRANSMIT_RETRIES   = 3;
     const uint8_t  COMMAND_REPEATS = 2;
