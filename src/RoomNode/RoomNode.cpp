@@ -241,6 +241,7 @@ void RoomNode::lightsControlTask(void* pvParameter) {
     uint16_t current_minutes;
     CommandResult result;
     LightsUpdateMsg lights_update;
+    vTaskDelay(pdMS_TO_TICKS(2000)); // Wait presenceTask to execute
 
     while (true) {
         // Lock task when user manually turns off lights
