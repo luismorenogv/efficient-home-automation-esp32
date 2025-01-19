@@ -23,7 +23,7 @@ bool RoomCommunications::waitForAck(MessageType expected_ack, unsigned long time
 
 // Called when an ACK is received, releases semaphore if it matches expected ACK
 void RoomCommunications::ackReceived(uint8_t* mac_addr, MessageType acked_msg) {
-    if (memcmp(mac_addr, master_mac_addr, sizeof(mac_addr)) == 0) {
+    if (memcmp(mac_addr, master_mac_addr, MAC_ADDRESS_LENGTH) == 0) {
         if (acked_msg == last_acked_msg) {
             ack_received = true;
             xSemaphoreGive(ackSemaphore);

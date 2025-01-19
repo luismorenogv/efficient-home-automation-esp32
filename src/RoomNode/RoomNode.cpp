@@ -16,9 +16,10 @@ RoomNode::RoomNode(uint8_t room_id)
     instance = this;
     espnowQueue = xQueueCreate(10, sizeof(IncomingMsg));
     presenceQueue = xQueueCreate(10, sizeof(uint8_t));
+    lightsToggleQueue = xQueueCreate(10, sizeof(bool));
     radioMutex = xSemaphoreCreateMutex();
 
-    if (radioMutex == NULL || espnowQueue == NULL || presenceQueue == NULL) {
+    if (radioMutex == NULL || espnowQueue == NULL || presenceQueue == NULL || lightsToggleQueue == NULL) {
         LOG_ERROR("Failed to create required FreeRTOS resources");
         return;
     }
@@ -36,7 +37,10 @@ void RoomNode::initialize() {
     }
 
     communications.initializeWifi();
-    while(!ntpClient.initialize());
+    if (!ntpClient.initialize()){
+        LOG_ERROR("NTP init failed.");
+        tryLater();
+    }
     if (!communications.initializeESPNOW()) {
         LOG_ERROR("ESP-NOW init failed.");
         tryLater();
@@ -132,7 +136,10 @@ void RoomNode::run() {
     if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
 
     result = xTaskCreate(heartbeatTask, "Heartbeat Task", 2048, this, 2, &HeartBeatTaskHandle);
-    if (result != pdPASS) LOG_ERROR("Failed NTPSync Task");
+    if (result != pdPASS) LOG_ERROR("Failed Heartbeat Task");
+
+    result = xTaskCreate(lightsToggleTask, "Lights Toggle Task", 1024, this, 2, &LightsToggleTaskHandle);
+    if (result != pdPASS) LOG_ERROR("Failed Lights Toggle Task");
 
     LOG_INFO("RoomNode running tasks...");
 }
@@ -195,36 +202,7 @@ void RoomNode::espnowTask(void* pvParameter) {
                         }
                         toggle_payload = reinterpret_cast<LightsToggleMsg*>(msg.data);
                         turn_on = toggle_payload->turn_on;
-
-                        // User can turn off lights at any presence state and it will pause the presence automation
-                        // But user can only turn on lights if presence is detected
-                        if (turn_on) {
-                            if (self->lights.isOn()) {
-                                LOG_INFO("Lights are already ON");
-                            } else {
-                                LOG_INFO("Turning lights ON");
-                                presence_state = digitalRead(LD2410_PIN);
-                                if (presence_state == HIGH){
-                                    self->lights.sendCommand(Command::ON);
-                                    self->user_stop = false;
-                                } else {
-                                    // presenceTask will turn on the lights if presence is detected
-                                    LOG_INFO("Presence not detected. Lights turn on ignored.");
-                                }
-                            }
-                        } else {
-                            if (!self->lights.isOn()) {
-                                LOG_INFO("Lights are already OFF");
-                            } else {
-                                LOG_INFO("Turning lights OFF");
-                                self->lights.sendCommand(Command::OFF);
-                            }
-                            self->user_stop = true;
-                        }
-                        lights_update.is_on = self->lights.isOn(); 
-                        LOG_INFO("TEST2");
-                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
-                        LOG_INFO("Lights update sent to the master");
+                        xQueueSend(self->lightsToggleQueue, &turn_on, portMAX_DELAY);
                     }
                     break;
 
@@ -237,7 +215,6 @@ void RoomNode::espnowTask(void* pvParameter) {
         }
     }
 }
-
 
 // Periodically checks and updates lights mode/brightness
 void RoomNode::lightsControlTask(void* pvParameter) {
@@ -314,7 +291,7 @@ void RoomNode::presenceTask(void* pvParameter) {
 
             new_presence = (presence_state == HIGH);
             if (new_presence && !previous_presence) {
-                LOG_INFO("Presence detected.");
+                LOG_INFO("PRESENCE DETECTED");
                 if (self->lights.isOn()){
                     LOG_INFO("Lights are already ON");
                 } else{
@@ -339,7 +316,7 @@ void RoomNode::presenceTask(void* pvParameter) {
                 }
                 
             } else if (!new_presence && previous_presence) {
-                LOG_INFO("No presence.");
+                LOG_INFO("NO PRESENCE DETECTED");
                 self->airConditioner.turnOff();
                 if(!self->lights.isOn()){
                     LOG_INFO("Lights are already OFF");
@@ -423,6 +400,49 @@ void RoomNode::heartbeatTask(void* pvParameter){
         // LOG_INFO("heartbeatTask: Stack watermark = %u", (unsigned)watermark);
     }
     
+}
+
+// Process lights toggle petitions from master
+void RoomNode::lightsToggleTask(void* pvParameter) {
+    RoomNode* self = static_cast<RoomNode*>(pvParameter);
+    bool turn_on = false;
+    LightsUpdateMsg lights_update;
+    while (true) {
+        if (xQueueReceive(self->lightsToggleQueue, &turn_on, portMAX_DELAY) == pdTRUE) {
+
+            // User can turn off lights at any presence state and it will pause the presence automation
+            // But user can only turn on lights if presence is detected
+            if (turn_on) {
+                if (self->lights.isOn()) {
+                    LOG_INFO("Lights are already ON");
+                } else {
+                    LOG_INFO("Turning lights ON");
+                    if (self->presenceSensor.getPresence()){
+                        self->lights.sendCommand(Command::ON);
+                        self->user_stop = false;
+                    } else {
+                        // presenceTask will turn on the lights if presence is detected
+                        LOG_INFO("Presence not detected. Lights turn on ignored.");
+                    }
+                }
+            } else {
+                if (!self->lights.isOn()) {
+                    LOG_INFO("Lights are already OFF");
+                } else {
+                    LOG_INFO("Turning lights OFF");
+                    self->lights.sendCommand(Command::OFF);
+                }
+                self->user_stop = true;
+            }
+            lights_update.is_on = self->lights.isOn(); 
+            self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
+            LOG_INFO("Lights update sent to the master");
+            
+            // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            // LOG_INFO("lightsToggleTask: Stack watermark = %u", (unsigned)watermark);
+
+        }
+    }
 }
 
 // If initialization or network join fails, sleeps for 30 minutes

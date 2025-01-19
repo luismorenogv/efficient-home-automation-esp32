@@ -12,6 +12,16 @@
 #include <freertos/queue.h>
 #include "config.h"
 
+#define sensorSerial Serial2
+#define RX_PIN 16
+#define TX_PIN 17
+#ifdef ENABLE_LOGGING
+    #define DEBUG_MODE
+#endif
+#include "MyLD2410.h"
+
+MyLD2410 sensor(sensorSerial);
+
 class LD2410 {
 public:
     LD2410();
@@ -34,18 +44,10 @@ public:
 
 private:
     const uint8_t MAX_INIT_RETRIES = 3;
+    const uint32_t PRESENCE_TIMEOUT = 1000;
+
     static void IRAM_ATTR staticPresenceISR();
     void IRAM_ATTR presenceISR();
-
-    // Sends a config command to the sensor
-    bool sendCommand(const uint8_t* cmd, size_t len);
-
-    // Waits for an ACK response to the last command
-    bool waitForAck(uint16_t expectedCmdWord, uint8_t expectedStatus = 0);
-
-    // For potential future use: reads UART response
-    bool readResponse(uint8_t* buffer, size_t bufferSize, uint32_t timeoutMs = 100);
-
     static LD2410* instance;
     QueueHandle_t presenceQueue;
 };
