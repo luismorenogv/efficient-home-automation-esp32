@@ -49,12 +49,14 @@ private:
 
     QueueHandle_t espnowQueue;
     QueueHandle_t presenceQueue;
+    QueueHandle_t lightsToggleQueue;
 
     TaskHandle_t espnowTaskHandle;
     TaskHandle_t lightsControlTaskHandle;
     TaskHandle_t presenceTaskHandle;
     TaskHandle_t NTPSyncTaskHandle;
     TaskHandle_t HeartBeatTaskHandle;
+    TaskHandle_t LightsToggleTaskHandle;
 
     SemaphoreHandle_t radioMutex;
 
@@ -64,6 +66,7 @@ private:
     static void presenceTask(void* pvParameter);
     static void NTPSyncTask(void* pvParameter);
     static void heartbeatTask(void* pvParameter);
+    static void lightsToggleTask(void* pvParameter);
 
     // If initialization fails, sleeps to retry later
     void tryLater();
