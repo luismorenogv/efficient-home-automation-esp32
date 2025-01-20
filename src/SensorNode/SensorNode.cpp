@@ -92,10 +92,12 @@ void SensorNode::run() {
             LOG_ERROR("No ACK after max retries for sensor data");
             // Try to joinNetwork next cycle
             *first_cycle = true;
+            powerManager.retryLater();
         }
 
         if (espNowHandler.wait_for_send){
-            vTaskDelay(pdMS_TO_TICKS(100));
+            // Wait for message to be sent before going to sleep
+            vTaskDelay(pdMS_TO_TICKS(50));
         }
     }
 }

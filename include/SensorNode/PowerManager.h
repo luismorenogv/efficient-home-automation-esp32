@@ -21,6 +21,9 @@ public:
     // Enters deep sleep indefinitely
     void enterPermanentDeepSleep();
 
+    // Goes to sleep for the next minute
+    void retryLater();
+
     // Updates the sleep duration
     void updateSleepPeriod(uint32_t new_sleep_duration_ms);
 
