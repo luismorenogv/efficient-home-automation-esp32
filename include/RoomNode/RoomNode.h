@@ -70,4 +70,7 @@ private:
 
     // If initialization fails, sleeps to retry later
     void tryLater();
+
+    // Sets lights ON/OFF and updates master
+    void toggleLightsAndUpdate(bool turn_on);
 };

@@ -16,6 +16,13 @@ void PowerManager::enterDeepSleep() {
     esp_deep_sleep_start();
 }
 
+void PowerManager::retryLater() {
+    LOG_INFO("Retrying in 1 min. Going to Sleep");
+    // Convert ms to µs for esp_sleep_enable_timer_wakeup
+    esp_sleep_enable_timer_wakeup( 1 * 1000 * 1000);
+    esp_deep_sleep_start();
+}
+
 void PowerManager::enterPermanentDeepSleep() {
     LOG_INFO("Entering permanent deep sleep");
     esp_deep_sleep_start();

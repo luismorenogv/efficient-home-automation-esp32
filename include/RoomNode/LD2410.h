@@ -15,12 +15,8 @@
 #define sensorSerial Serial2
 #define RX_PIN 16
 #define TX_PIN 17
-#ifdef ENABLE_LOGGING
-    #define DEBUG_MODE
-#endif
 #include "MyLD2410.h"
 
-MyLD2410 sensor(sensorSerial);
 
 class LD2410 {
 public:
@@ -39,9 +35,6 @@ public:
     // Returns current presence state
     bool getPresence();
 
-    // Configures sensor parameters via UART
-    bool initialize();
-
 private:
     const uint8_t MAX_INIT_RETRIES = 3;
     const uint32_t PRESENCE_TIMEOUT = 1000;
@@ -50,4 +43,5 @@ private:
     void IRAM_ATTR presenceISR();
     static LD2410* instance;
     QueueHandle_t presenceQueue;
+    MyLD2410 sensor;
 };
