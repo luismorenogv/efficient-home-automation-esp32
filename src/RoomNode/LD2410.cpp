@@ -13,7 +13,7 @@ LD2410* LD2410::instance = nullptr;
 #define LD2410_BAUDRATE 256000
 #define LD2410_SERIAL Serial2
 
-LD2410::LD2410() {
+LD2410::LD2410(): sensor(sensorSerial) {
     instance = this;
     pinMode(LD2410_PIN, INPUT);
 }
@@ -50,12 +50,6 @@ void IRAM_ATTR LD2410::presenceISR() {
     if (xHigherPriorityTaskWoken) {
         portYIELD_FROM_ISR();
     }
-}
-
-// Initializes and configures the LD2410 sensor via UART commands
-bool LD2410::initialize() {
-    LOG_INFO("Setting the no-one window to %u seconds", UNMANNED_DURATION_S);
-    sensor.setNoOneWindow(UNMANNED_DURATION_S);
 }
 
 bool LD2410::getPresence(){

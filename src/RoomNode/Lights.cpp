@@ -109,7 +109,14 @@ CommandResult Lights::sendCommand(Command command) {
             if ((command != Command::ON && command != Command::OFF) && !isOn()){
                 // Exit loop if trying to send a command other than ON/OFF when lights are OFF
                 break;
+            } else if (command == Command::ON && isOn()){
+                // Exit loop if trying to turn lights ON when they are already ON
+                break;
+            } else if (command == Command::OFF && !isOn()){
+                // Exit loop if trying to turn lights OFF when they are already OFF
+                break;
             }
+            
             // Read initial lux
             float initial_lux = getLuxValue();
             LOG_INFO("Lux before cmd: %.2f", initial_lux);
@@ -210,7 +217,7 @@ bool Lights::determineMode(uint16_t current_minutes) const {
     uint16_t warm_minutes = warm.hour * 60 + warm.min;
     uint16_t cold_minutes = cold.hour * 60 + cold.min;
 
-    LOG_INFO("determineMode function called with:\r\nwarm_minutes: %u\r\ncold_minutes: %u\r\ncurrent_minutes: %u", warm_minutes, cold_minutes, current_minutes);
+    LOG_INFO("determineMode function called with:warm_minutes: %u, cold_minutes: %u, current_minutes: %u", warm_minutes, cold_minutes, current_minutes);
 
     if (warm_minutes < cold_minutes) {
         return (current_minutes >= warm_minutes && current_minutes < cold_minutes);

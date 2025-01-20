@@ -31,11 +31,6 @@ void RoomNode::initialize() {
     Serial.begin(115200);
     delay(1000);
 
-    if (!presenceSensor.initialize()){
-        LOG_ERROR("Presence Sensor init failed.");
-        // tryLater();
-    }
-
     communications.initializeWifi();
     if (!ntpClient.initialize()){
         LOG_ERROR("NTP init failed.");
@@ -126,7 +121,7 @@ bool RoomNode::joinNetwork() {
 void RoomNode::run() {
     BaseType_t result;
 
-    result = xTaskCreate(presenceTask, "Presence Task", 4096, this, 3, &presenceTaskHandle);
+    result = xTaskCreate(presenceTask, "Presence Task", 8192, this, 3, &presenceTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Presence Task");
     
     result = xTaskCreate(lightsControlTask, "Lights Control Task", 4096, this, 2, &lightsControlTaskHandle);
@@ -138,7 +133,7 @@ void RoomNode::run() {
     result = xTaskCreate(heartbeatTask, "Heartbeat Task", 2048, this, 2, &HeartBeatTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Heartbeat Task");
 
-    result = xTaskCreate(lightsToggleTask, "Lights Toggle Task", 1024, this, 2, &LightsToggleTaskHandle);
+    result = xTaskCreate(lightsToggleTask, "Lights Toggle Task", 2048, this, 2, &LightsToggleTaskHandle);
     if (result != pdPASS) LOG_ERROR("Failed Lights Toggle Task");
 
     LOG_INFO("RoomNode running tasks...");
@@ -246,19 +241,10 @@ void RoomNode::lightsControlTask(void* pvParameter) {
             self->lights.adjustBrightness();
             
         } else {
-            if (!self->lights.isEnoughLight() && self->presenceSensor.getPresence()){
-                LOG_INFO("There is not enought natural light anymore, turning on lights");
-                self->lights.sendCommand(Command::ON);
-                result = self->lights.sendCommand(Command::ON);
-                if(result == CommandResult::UNCLEAR){
-                    LOG_INFO("Lights are unavailable");
-                } else if (result == CommandResult::NEGATIVE){
-                    LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
-                    self->lights.sendCommand(Command::ON);
-                } else {
-                    lights_update.is_on = true;
-                    self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
-                    LOG_INFO("Lights succesfully turned ON");
+            if (self->presenceSensor.getPresence()){
+                if (self->lights.isEnoughLight()){
+                    LOG_INFO("There is not enought natural light anymore, turning on lights");
+                    self->toggleLightsAndUpdate(true);
                 }
             } else {
                 lights_on = false;
@@ -292,48 +278,17 @@ void RoomNode::presenceTask(void* pvParameter) {
             new_presence = (presence_state == HIGH);
             if (new_presence && !previous_presence) {
                 LOG_INFO("PRESENCE DETECTED");
-                if (self->lights.isOn()){
-                    LOG_INFO("Lights are already ON");
-                } else{
-                    if (self->lights.isEnoughLight()){
-                        LOG_INFO("Lights are OFF but with enough natural light. Leaving them OFF");
-                    } else {
-                        LOG_INFO("Turning lights ON");
-                        result = self->lights.sendCommand(Command::ON);
-                        if(result == CommandResult::UNCLEAR){
-                            LOG_INFO("Lights are unavailable");
-                            continue;
-                        } else if (result == CommandResult::NEGATIVE){
-                            LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
-                            self->lights.sendCommand(Command::ON);
-                        } else {
-                            lights_update.is_on = true;
-                            self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(LightsUpdateMsg));
-                            LOG_INFO("Lights succesfully turned ON");
-                        }
-                    }
-                    
+                if (self->lights.isEnoughLight()){
+                    LOG_INFO("There is enough natural light, leaving lights off");
+                }
+                else {
+                    self->toggleLightsAndUpdate(true);
                 }
                 
             } else if (!new_presence && previous_presence) {
                 LOG_INFO("NO PRESENCE DETECTED");
                 self->airConditioner.turnOff();
-                if(!self->lights.isOn()){
-                    LOG_INFO("Lights are already OFF");
-                } else{
-                    result = self->lights.sendCommand(Command::OFF);
-                    if(result == CommandResult::UNCLEAR){
-                        LOG_INFO("Lights are unavailable");
-                        continue;
-                    } else if (result == CommandResult::NEGATIVE){
-                        LOG_WARNING("Lights virtual state wasn't synchronized with real state. Fixing issue...");
-                        self->lights.sendCommand(Command::OFF);
-                    } else{
-                        LOG_INFO("Lights succesfully turned OFF");
-                        lights_update.is_on = false;
-                        self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
-                    }
-                }
+                self->toggleLightsAndUpdate(false);
             }
             previous_presence = new_presence;
             // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
@@ -413,30 +368,17 @@ void RoomNode::lightsToggleTask(void* pvParameter) {
             // User can turn off lights at any presence state and it will pause the presence automation
             // But user can only turn on lights if presence is detected
             if (turn_on) {
-                if (self->lights.isOn()) {
-                    LOG_INFO("Lights are already ON");
+                if (self->presenceSensor.getPresence()){
+                    self->toggleLightsAndUpdate(true);
+                    self->user_stop = false;
                 } else {
-                    LOG_INFO("Turning lights ON");
-                    if (self->presenceSensor.getPresence()){
-                        self->lights.sendCommand(Command::ON);
-                        self->user_stop = false;
-                    } else {
-                        // presenceTask will turn on the lights if presence is detected
-                        LOG_INFO("Presence not detected. Lights turn on ignored.");
-                    }
+                    // presenceTask will turn on the lights if presence is detected
+                    LOG_INFO("Presence not detected. Lights turn on ignored.");
                 }
             } else {
-                if (!self->lights.isOn()) {
-                    LOG_INFO("Lights are already OFF");
-                } else {
-                    LOG_INFO("Turning lights OFF");
-                    self->lights.sendCommand(Command::OFF);
-                }
+                self->toggleLightsAndUpdate(false);
                 self->user_stop = true;
             }
-            lights_update.is_on = self->lights.isOn(); 
-            self->communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
-            LOG_INFO("Lights update sent to the master");
             
             // UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
             // LOG_INFO("lightsToggleTask: Stack watermark = %u", (unsigned)watermark);
@@ -450,4 +392,29 @@ void RoomNode::tryLater() {
     LOG_INFO("Going deep sleep for the next 30 minutes");
     esp_sleep_enable_timer_wakeup(30*60*1000000);
     esp_deep_sleep_start();
+}
+
+void RoomNode::toggleLightsAndUpdate(bool turn_on) {
+    if (turn_on) {
+        if (lights.isOn()) {
+            LOG_INFO("Lights are already ON");
+        } else {
+            LOG_INFO("Turning lights ON");
+            lights.sendCommand(Command::ON);
+        }
+    } else {
+        if (!lights.isOn()) {
+            LOG_INFO("Lights are already OFF");
+        } else {
+            LOG_INFO("Turning lights OFF");
+            lights.sendCommand(Command::OFF);
+        }
+    }
+
+    // Send lights update to master
+    LightsUpdateMsg lights_update;
+    lights_update.is_on = lights.isOn();
+    communications.sendMsg(reinterpret_cast<const uint8_t*>(&lights_update), sizeof(lights_update));
+
+
 }
