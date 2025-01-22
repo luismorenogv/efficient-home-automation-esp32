@@ -45,6 +45,9 @@ void MasterController::initialize() {
     webSockets.setSleepDurationCallback(MasterController::sleepPeriodChangedCallback);
     webSockets.setScheduleCallback(MasterController::scheduleChangedCallback);
     webSockets.setLightsToggleCallback(MasterController::lightsToggleCallback);
+
+    // Start Web Server Aync Execution
+    webServer.start(); // Runs in any core by default
     
     BaseType_t result;
 
@@ -52,12 +55,6 @@ void MasterController::initialize() {
     result = xTaskCreatePinnedToCore(espnowTask,"ESP-NOW Task",8192,this,2,&espnowTaskHandle,1);
     if (result != pdPASS) {
         LOG_ERROR("Failed to create ESP-NOW Task");
-    }
-
-    // Create Web Server Task
-    result = xTaskCreatePinnedToCore(webServerTask,"Web Server Task",8192,this,2,&webServerTaskHandle,0);
-    if (result != pdPASS) {
-        LOG_ERROR("Failed to create Web Server Task");
     }
 
     // Create NTP Sync Task
@@ -294,15 +291,6 @@ void MasterController::espnowTask(void* pvParameter) {
                     LOG_WARNING("Received unknown message type: %d", msg_type);
             }
         }
-    }
-}
-
-void MasterController::webServerTask(void* pvParameter) {
-    MasterController* self = static_cast<MasterController*>(pvParameter);
-    self->webServer.start();
-
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(WEB_SERVER_PERIOD));
     }
 }
 

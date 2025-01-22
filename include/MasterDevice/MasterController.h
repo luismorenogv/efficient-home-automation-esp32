@@ -53,7 +53,6 @@ private:
 
     // FreeRTOS task handles
     TaskHandle_t espnowTaskHandle;      // Handle for ESP-NOW Task
-    TaskHandle_t webServerTaskHandle;   // Handle for Web Server Task
     QueueHandle_t espnowQueue;          // Queue for incoming ESP-NOW messages
     TaskHandle_t ntpSyncTaskHandle;     // Handle for NTP Sync Task 
 
@@ -68,7 +67,6 @@ private:
     
     // Task functions
     static void espnowTask(void* pvParameter);
-    static void webServerTask(void* pvParameter);
     static void ntpSyncTask(void* pvParameter);
     static void updateCheckTask(void* pvParameter);
 
