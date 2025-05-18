@@ -10,4 +10,4 @@ A modular home automation system built for demonstration and learning, showcasin
 - ESP-NOW & Wi‑Fi Hybrid: Low‑power ESP‑NOW for node‑to‑hub messages; Wi‑Fi for dashboard hosting and NTP sync.
 - Deep Sleep: SensorNodes use deep sleep to extend battery life, waking only to sample or reconfigure.
 - FreeRTOS Tasks: Concurrent tasks handle messaging, sensor polling, and control loops, ensuring smooth operation.
-- Auto‑Discovery: Nodes broadcast JOIN messages; the hub dynamically registers them without hard‑coding addresses.
+- Auto‑Discovery & Reliable Messaging: Nodes announce via JOIN; ACK‑and‑retry layer ensures robust ESP‑NOW delivery.
