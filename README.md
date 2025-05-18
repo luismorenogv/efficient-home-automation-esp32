@@ -1,5 +1,5 @@
 # Efficient Home Automation with ESP32
-A modular home automation system built for demonstration and learning, showcasing how to integrate ESP32 microcontrollers for wireless sensor networks, device control, and simple web dashboards.
+A modular home automation system built showcasing how to integrate ESP32 microcontrollers for wireless sensor networks, tradicional home devices control via IR and RF, and simple web dashboards.
 
 ## What It Does
 - **Environmental Monitoring**: Battery-powered SensorNodes measure temperature and humidity on configurable intervals and report to a central hub.
